@@ -205,6 +205,8 @@ r.s.zhang = function(rsmin, brs, par.sun, par.sha, Lsun, Lsha, T.c, tmin, tmax,
    
 }
 
+# DOSE rs calculation, Sadiq, June 2019
+r.s.dose = function(){}
 
 ################################################################################
 
