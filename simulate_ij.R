@@ -31,6 +31,8 @@ f_simulate_ij = function(IJ) {
          assign(x = paste0(current_var, '_PFT_hist_ijd'), value = array(NA, dim=c(length(pftname), 24/dt_hr)))
       } else if (var_name$res_level[ivar] == 'grid') {
          assign(x = paste0(current_var, '_hist_ijd'), value =  array(NA, dim=24/dt_hr))
+      } else if (var_name$res_level[ivar] == 'PFT_daily') {
+         assign(x = paste0(current_var, '_PFT_hist_ijd'), value = array(NA, dim = length(pftname)))
       }
    }
    rm(current_var, ivar)
@@ -41,6 +43,21 @@ f_simulate_ij = function(IJ) {
          assign(x = out_var, value = array(NA, dim=c(length(pftname), 24/dt_hr)))
       }
       rm(out_var)
+   }
+   
+   # Redefine new history output for temp_data for BGC mode
+   if (biogeochem_flag) {
+       BGC_temp_var_vec = c('LAI_PFT_hist_ijd', 'SAI_PFT_hist_ijd', 'leafC_PFT_hist_ijd', 'finerootC_PFT_hist_ijd', 'livestemC_PFT_hist_ijd', 'deadstemC_PFT_hist_ijd', 'livecoarserootC_PFT_hist_ijd', 'deadcoarserootC_PFT_hist_ijd', 'grainC_PFT_hist_ijd',
+                            'GDDT2m_PFT_hist_ijd', 'GDDTsoil_PFT_hist_ijd', 'GDDmat_PFT_hist_ijd', 'GDDemer_PFT_hist_ijd', 'GDDrepr_PFT_hist_ijd',
+                            'crop_live_flag_PFT_hist_ijd', 'crop_plant_flag_PFT_hist_ijd', 'leaf_emergence_flag_PFT_hist_ijd', 'grain_fill_flag_PFT_hist_ijd', 'harvest_flag_PFT_hist_ijd', 'peak_LAI_flag_PFT_hist_ijd',
+                            'day_of_planting_PFT_hist_ijd', 'day_of_harvesting_PFT_hist_ijd', 'astem_PFT_hist_ijd', 'aleaf_PFT_hist_ijd', 'astem_leafem_PFT_hist_ijd', 'aleaf_leafem_PFT_hist_ijd')
+       
+       for (out_var in BGC_temp_var_vec) {
+           if (!exists(out_var)) {
+               # All these variables are calculated daily, no hourly dimension
+               assign(x = out_var, value = array(NA, dim = c(length(pftname))))
+           }
+       }
    }
    
    #############################################################################
@@ -73,30 +90,52 @@ f_simulate_ij = function(IJ) {
    
    # Daily mean temperature (K):
    T_daily = mean(T2M[i,j,], na.rm=TRUE)
+   Tmin_daily = min(T2M[i,j,], na.rm=TRUE)
    
    # 10-day mean air temperature (K) to calculate temperature acclimation:
    acclimation_flag = ((d > 10) | continue_flag)
    if (acclimation_flag) {
       # Daily mean temperature of the past 10 days:
       T_daily_last10d = rep(NaN, times=10)
+      T_dailymin_last10d = rep(NaN, times=10)
       for (d_prev in 10:1) {
          # Date of d_prev days before current date:
          previous_date = to.yyyymmdd(from.yyyymmdd(current_date) - d_prev*24)
          filename = paste0(simulation_dir, 'temp_data/temp_', as.character(previous_date), '/temp_i', i_str, '_j', j_str, '.RData')
          load(filename)
          T_daily_last10d[11-d_prev] = T_daily_ijd
+         T_dailymin_last10d[11-d_prev] = T_dailymin_ijd
       }
       # 10-day mean air temperature (K):
       T_10d = mean(T_daily_last10d, na.rm=TRUE)
+      Tmin_10d = mean(T_dailymin_last10d, na.rm=TRUE)
    } else {
       # 10-day mean air temperature (K):
       T_10d = T_daily
+      Tmin_10d = Tmin_daily
    }
    
    # Soil albedo for PAR for dry and saturated soil:
    # 3rd dim of "soil albedo" = [dry (visible), dry (Near IR), saturated (visible), saturated (Near IR)]
    alpha_soil_dry = soil_albedo[i,j,1]
    alpha_soil_sat = soil_albedo[i,j,3]
+   
+   # [Crop model] climatic GDD for determining GDD_mat
+   if (biogeochem_flag){
+       if (get_GDDmat_method == "CLM4.5"){
+           GDD0 = GDD0_map[i,j]
+           GDD8 = GDD8_map[i,j]
+           GDD10 = GDD10_map[i,j]
+       } else if (get_GDDmat_method == "Sack") {
+           GDDmat_maize = GDDmat_maize_map[i,j]
+           GDDmat_wheat = GDDmat_wheat_map[i,j]
+           GDDmat_soybean = GDDmat_soybean_map[i,j]
+       }
+       
+       if (get_planting_date_option == 'prescribed-map') {
+           prescribed_planting_date = planting_date_map[i,j]
+       }
+   }
    
    # Other model parameters:
    met_cond_flag = TRUE
@@ -106,24 +145,50 @@ f_simulate_ij = function(IJ) {
    
    success = FALSE
    
+   if (biogeochem_flag) {
+       selected_pft = BGC_pft_selection
+   } else {
+       selected_pft = 2:length(pftname)
+   }
+   
+   
    # PFT-specific parameters:
-   for (ipft in 2:length(pftname)) {
+   for (ipft in selected_pft) {
       
-      # Leaf area index (m^2 m^-2):
-      if (leap & as.numeric(MM) > 2) n_PAI = n_day_whole - 1 else n_PAI = n_day_whole
-      LAI = LAI_day_PFT[i,j,ipft,n_PAI]
-      
-      if (LAI < 0.01 | PFT_frac[i,j,ipft] < 0.01) {
+      if (!biogeochem_flag){
+          # Prescribed leaf area index (m^2 m^-2):
+          if (leap & as.numeric(MM) > 2) n_PAI = n_day_whole - 1 else n_PAI = n_day_whole
+          LAI = LAI_day_PFT[i,j,ipft,n_PAI]
+      } else {
+          if (d == 1){
+              # Read LAI and SAI from initial_data for the first day of simulation
+              LAI = LAI_initial_map[i,j,ipft]
+              SAI = SAI_initial_map[i,j,ipft]
+          } else {
+              # Read LAI and SAI from temp_data otherwise
+              prev_date = to.yyyymmdd(from.yyyymmdd(current_date) - 24)
+              filename = paste0(sim_dir,'temp_data/temp_',prev_date,'/temp_i',i_str,'_j', j_str, '.RData')
+              print(paste0("Loading ", filename))
+              load(filename)
+              
+              LAI = tlai_PFT_lasthd_ijd[ipft]
+              SAI = tsai_PFT_lasthd_ijd[ipft]
+          }
+      }
+
+      if ((LAI < 0.01 && !biogeochem_flag) | PFT_frac[i,j,ipft] < 0.01) {
          
          # Too little vegetation. Skip current PFT calculations.
+          print(paste0("Skip calculation for ipft = ", ipft, " - ", pftname[ipft]))
          next
          
       } else {
-         
-         # Leaf area index range (m^2 m^-2) (shsun)
-         LAI_min = min(LAI_day_PFT[i,j,ipft,], na.rm = TRUE)
-         LAI_max = max(LAI_day_PFT[i,j,ipft,], na.rm = TRUE)
-         
+         if (!biogeochem_flag) {
+             
+             # Leaf area index range (m^2 m^-2) (shsun)
+             LAI_min = min(LAI_day_PFT[i,j,ipft,], na.rm = TRUE)
+             LAI_max = max(LAI_day_PFT[i,j,ipft,], na.rm = TRUE)
+             
          # Stem area index (m^2 m^-2):
          SAI = SAI_day_PFT[i,j,ipft,n_PAI]
          # Consider LAI only?
@@ -131,6 +196,7 @@ f_simulate_ij = function(IJ) {
          
          # Leaf area index of previous day (m^2 m^-2):
          if (n_PAI == 1) LAI_prev_day = LAI_day_PFT[i,j,ipft,365] else LAI_prev_day = LAI_day_PFT[i,j,ipft,n_PAI-1]
+         }
          
          # PFT-level displacement height and roughness length (not used in the current version):
          # Canopy height (m):
@@ -178,8 +244,94 @@ f_simulate_ij = function(IJ) {
          tau_leaf = taulvis[ipft]
          # Stem transmittance for PAR:
          tau_stem = tausvis[ipft]
-         # Medlyn model parameter:
-         g1_med = g1_med_table[ipft]
+         
+         if (biogeochem_flag) {
+             # Note:
+             # C3 unmanaged rainfed/irrigated crops (ipft == 16:17) are belong to both stress deciduous and crop PFT, but the phenology is based on stress deciduous PFT 
+             
+             # Leaf allocation coefficient parameter for crops
+             a_leaf_final = aleaff[ipft]
+             a_leaf_alloc_power = allconsl[ipft]
+             b_factor = bfact[ipft]
+             a_leaf_base = fleafi[ipft]
+             # Stem allocation coefficient parameter for crops
+             a_stem_final = astemf[ipft]
+             a_stem_alloc_power = allconss[ipft]
+             GDD_decline_factor = declfact[ipft]
+             # Root allocation coefficient parameter for crops
+             a_root_initial = arooti[ipft]
+             a_root_final = arootf[ipft]
+             # Base temperature og GDD accumulation for crops
+             GDD_base_T = baset[ipft]
+             # Allocation ratio of coarse root : live stem
+             allocRatio_croot.stem = croot_stem[ipft]
+             # Crop (0 = non-crop; 1 = crop):
+             crop_flag = crop[ipft]
+             # C:N ratio of dead wood
+             deadwd_cn = deadwdcn[ipft]
+             # Through canopy (projected area basis) dSLA/dLAI (m^2 gC^-1):
+             dsla_dlai = dsladlai[ipft]
+             # Allocation flag to storage pools (deciduous) or display pools (evergreen and crops)
+             f_cur = fcur[ipft]
+             # C:N ratio of fine root during reproductive stage for crops
+             froot_cn_final = ffrootcn[ipft]
+             # C:N ratio of leaf during reproductive stage for crops
+             leaf_cn_final = fleafcn[ipft]
+             # Allocation flag to wood
+             alloc_livewood = flivewd[ipft]
+             # C:N ratio of fine root
+             froot_cn = frootcn[ipft]
+             # Allocation ratio of fine root : leaf
+             allocRatio_froot.leaf = froot_leaf[ipft]
+             # C:N ratio of live stem during reproductive stage
+             stem_cn_final = fstemcn[ipft]
+             # C:N ratio of grain
+             grain_cn = graincn[ipft]
+             # % of GDD_mat to reach reproductive stage
+             repr_GDDpercent = grnfill[ipft]
+             # Maximum GDD_mat allowed for crops
+             GDDmat_max = hybgdd[ipft]
+             # Prescribed maximum LAI allowed for crops
+             LAI_max = laimx[ipft]
+             # C:N ratio of leaf
+             leaf_cn = leafcn[ipft]
+             # % of GDD_mat to reach vegetative stage
+             emer_GDDpercent = lfemerg[ipft]
+             # C:N ratio of leaf litter
+             leafLitter_cn = lflitcn[ipft]
+             # C:N ratio of live wood
+             liveWood_cn = livewdcn[ipft]
+             # Daily min planting temperature requirment (K)
+             min_T_planting_req = min_planting_temp[ipft]
+             # Maximum growing season length allowed
+             crop_season_length_max = mxmat[ipft]
+             # Maximum increase in GDD_T2m allowed
+             GDDT2m_change_max = mxtmp[ipft]
+             # Daily average planting temperature requirement (K)
+             avg_T_planting_req = planting_temp[ipft]
+             # CLM rooting distribution parameter a and b and the root fraction
+             root_a_par = roota_par[ipft]
+             root_b_par = roota_par[ipft]
+             get_root_fraction = f_get_root_fraction(soil_depth_array = soil_layer_depth, a_rootfrac = root_a_par, b_rootfrac = root_b_par)
+             root_frac_array = get_root_fraction$root_fraction_array
+             # Seasonal deciduous PFT:
+             season_decid_flag = (season_decid[ipft] == 1)
+             # Specific leaf area (SLA) at top of canopy (projected area basis) (m^2 gC^-1):
+             sla_top = slatop[ipft]
+             # Allocation ratio of live stem : leaf
+             allocRatio_stem.leaf = stem_leaf[ipft]
+             # Stress deciduous PFT:
+             stress_decid_flag = (stress_decid[ipft] == 1)
+             # Woody life form (0 = non-woody; 1 = woody):
+             woody_flag = (woody[ipft] == 1)
+             # Maximum canopy height for crops:
+             ztopmax = ztopmx[ipft]
+             # CLM4.5 planting period for crops
+             earliest_planting_doy_NH = earliest_planting_jday_possible_NH[ipft]
+             latest_planting_doy_NH = latest_planting_jday_possible_NH[ipft]
+             earliest_planting_doy_SH = earliest_planting_jday_possible_SH[ipft]
+             latest_planting_doy_SH = latest_planting_jday_possible_SH[ipft]
+         }
          
          # Soil parameters:
          # Saturated soil matric potential for bulk root zone (mm):
@@ -303,6 +455,75 @@ f_simulate_ij = function(IJ) {
             
             ####################################################################
             
+            # Biogeochemistry module initialization (Pang)
+            # In the first simulation step, decalre new variables and read initial conditions from initial_map.nc
+            # In other time steps, read yesterday simulation result from temp_data/xxx.RData
+            
+            if (biogeochem_flag){
+                if (current_date == start_date && h == 1){
+                    
+                    # Initialization by declaring variables
+                    BGC_variable_declaration_names = c("a_stem","a_leaf","a_stem_leafem","a_leaf_leafem","GDDT2m","GDDTsoil","GDD_mat","GDD_repr","GDD_emer",
+                                                       "crop_live_flag", "peak_LAI_flag", "crop_plant_flag","leaf_emergence_flag","grain_fill_flag","harvest_flag","day_of_planting","day_of_harvest")
+                    BGC_variable_declaration_value = c(rep(0,9),
+                                                       rep(FALSE,6), rep(NA,2))
+                    if (length(BGC_variable_declaration_names) != length(BGC_variable_declaration_value)) {stop("[simulate_ij.R] length(BGC_variable_declaration_names) should be the same as length(BGC_variable_declaration_value)")}
+                    for (z in seq(BGC_variable_declaration_names)) {assign(x = BGC_variable_declaration_names[z], value = BGC_variable_declaration_value[z])}
+                    
+                    # Turning flags back to logical values
+                    BGC_flagvariable_names = c("crop_live_flag","peak_LAI_flag","crop_plant_flag","leaf_emergence_flag","grain_fill_flag","harvest_flag")
+                    for (z in seq(BGC_flagvariable_names)) {assign(x = BGC_flagvariable_names[z], value = as.logical(eval(parse(text = BGC_flagvariable_names[z]))))}
+                    
+                    # Initialization by reading from initial_map
+                    BGC_variable_readin_names = c("leaf_C","fineroot_C","livestem_C","deadstem_C","livecoarseroot_C","deadcoarseroot_C","grain_C", "LAI", "SAI")
+                    BGC_variable_readin_value = c(leafC_initial_map[i,j,ipft], frootC_initial_map[i,j,ipft], livestemC_initial_map[i,j,ipft], deadstemC_initial_map[i,j,ipft], livecrootC_initial_map[i,j,ipft], deadcrootC_initial_map[i,j,ipft], grainC_initial_map[i,j,ipft], LAI_initial_map[i,j,ipft], SAI_initial_map[i,j,ipft])
+                    print(paste0("simulate.ij LAI = ", LAI))
+                    if (length(BGC_variable_readin_names) != length(BGC_variable_readin_value)) {stop("[simulate_ij.R] length(BGC_variable_readin_names) should be the same as length(BGC_variable_readin_value)")}
+                    for (z in seq(BGC_variable_readin_names)) {assign(x = BGC_variable_readin_names[z], value = BGC_variable_readin_value[z])}
+                    # Turn NA LAI and SAI values to zero
+                    LAI = ifelse(test = is.na(LAI), yes = 0, no = LAI); SAI = ifelse(test = is.na(SAI), yes = 0, no = SAI)
+                    
+                    rm(z, BGC_variable_declaration_names, BGC_variable_declaration_value, BGC_flagvariable_names, BGC_variable_readin_names, BGC_variable_readin_value)
+                    
+                } else if (h == 1) {
+                    # LAI_prev for the second day is read from initial_data in BGC mode, otherwise it is read from temp_data from the day before yesterday
+                    if (current_date != to.yyyymmdd(from.yyyymmdd(start_date) + 24)){
+                        date_before_yesterday = to.yyyymmdd(from.yyyymmdd(current_date) - 48)
+                        filename = paste0(sim_dir,'temp_data/temp_',date_before_yesterday,'/temp_i',i_str,'_j', j_str, '.RData')
+                        load(filename)
+                        LAI_prev_day = tlai_PFT_lasthd_ijd[ipft]
+                    } else {
+                        LAI_prev_day = LAI_initial_map[i,j,ipft]
+                    }
+                    
+                    
+                    prev_date = to.yyyymmdd(from.yyyymmdd(current_date) - 24)
+                    filename = paste0(sim_dir,'temp_data/temp_',prev_date,'/temp_i',i_str,'_j', j_str, '.RData')
+                    print(paste0("Loading ", filename))
+                    load(filename)
+                    
+                    # Name in BGC_variable_readin_value should be consistent to the output temp_data 
+                    BGC_variable_readin_names = c("a_stem","a_leaf","a_stem_leafem","a_leaf_leafem","GDDT2m","GDDTsoil","GDD_mat","GDD_repr","GDD_emer",
+                                                  "crop_live_flag", "peak_LAI_flag", "crop_plant_flag","leaf_emergence_flag","grain_fill_flag","harvest_flag","day_of_planting","day_of_harvest",
+                                                  "leaf_C","fineroot_C","livestem_C","deadstem_C","livecoarseroot_C","deadcoarseroot_C","grain_C", "LAI", "SAI")
+                    BGC_variable_readin_value = c(astem_PFT_lasthd_ijd[ipft], aleaf_PFT_lasthd_ijd[ipft], astem_leafem_PFT_lasthd_ijd[ipft], aleaf_leafem_PFT_lasthd_ijd[ipft], GDDT2m_PFT_lasthd_ijd[ipft], GDDTsoil_PFT_lasthd_ijd[ipft], GDDmat_PFT_lasthd_ijd[ipft], GDDrepr_PFT_lasthd_ijd[ipft], GDDemer_PFT_lasthd_ijd[ipft],
+                                                  crop_live_flag_PFT_lasthd_ijd[ipft], peak_LAI_flag_lasthd_ijd[ipft], crop_plant_flag_PFT_lasthd_ijd[ipft], leaf_emergence_flag_lasthd_ijd[ipft], grain_fill_flag_lasthd_ijd[ipft], harvest_flag_lasthd_ijd[ipft], planting_jday_lasthd_ijd[ipft], harvesting_jday_lasthd_ijd[ipft],
+                                                  leafC_PFT_lasthd_ijd[ipft], frootC_PFT_lasthd_ijd[ipft], livestemC_PFT_lasthd_ijd[ipft], deadstemC_PFT_lasthd_ijd[ipft], livecrootC_PFT_lasthd_ijd[ipft], deadcrootC_PFT_lasthd_ijd[ipft], grainC_PFT_lasthd_ijd[ipft], tlai_PFT_lasthd_ijd[ipft], tsai_PFT_lasthd_ijd[ipft])
+                    if (length(BGC_variable_readin_names) != length(BGC_variable_readin_value)) {stop("[simulate_ij.R] length(BGC_variable_readin_names) should be the same as length(BGC_variable_readin_value)")}
+                    for (z in seq(BGC_variable_readin_names)) {assign(x = BGC_variable_readin_names[z], value = BGC_variable_readin_value[z])}
+                    
+                    # Turn flags back to logical values
+                    BGC_flagvariable_names = c("crop_live_flag","peak_LAI_flag","crop_plant_flag","leaf_emergence_flag","grain_fill_flag","harvest_flag")
+                    for (z in seq(BGC_flagvariable_names)) {assign(x = BGC_flagvariable_names[z], value = as.logical(eval(parse(text = BGC_flagvariable_names[z]))))}
+                    
+                    rm(z, BGC_flagvariable_names, BGC_variable_readin_names, BGC_variable_readin_value)
+                    
+                }
+            }
+                
+
+            ####################################################################
+            
             # Calculate aerodynamic conductance and/or temperature and humidity profiles using Monin Obukhov theory:
             # Now g_ah is always computed using either one of the two schemes below. (Tai, Feb 2019)
             if (Monin_Obukhov_flag | use_TEMIR_ga_flag) {
@@ -361,6 +582,21 @@ f_simulate_ij = function(IJ) {
             theta_wtop = theta_sat*soil_wetness_top
             # Cloud fraction (0-1):
             cldtot = CLDTOT[i,j,h]
+            # Soil temperature for different layers
+            if (biogeochem_flag) {
+            T_soil1 = TSOIL1[i,j,h]
+            T_soil2 = TSOIL2[i,j,h]
+            T_soil3 = TSOIL3[i,j,h]
+            T_soil4 = TSOIL4[i,j,h]
+            T_soil5 = TSOIL5[i,j,h]
+            if(any(is.na(c(T_soil1, T_soil2, T_soil3, T_soil4, T_soil5)))) {stop('[simulate.ij.R] Soil temperature from some layers is/are NA at lat = ',lat[j],' lon = ', lon[i])}
+            T_soil_array_input = array(NA, dim = length(soil_layer_depth))
+            
+            for (z in 1:length(soil_layer_depth)){
+                T_soil_array_input[z] = eval(parse(text = paste0("T_soil",z)))
+            }
+            }
+            
             
             ####################################################################
             
@@ -390,7 +626,17 @@ f_simulate_ij = function(IJ) {
             }
             
             # LAI of previous time step (assume linear interpolation):
+            if (!biogeochem_flag) {
             LAI_prev = LAI - (LAI - LAI_prev_day)/(24/dt_hr)
+            } else {
+                if (current_date != start_date) {
+                    # In BGC mode, new LAI is calculated at h == 24, therefore LAI_prev and LAI are taken from temp_data of d = n - 2 and d = n - 1 respectively.
+                    # The 'heal' in f_ozone_impact calculated from these two variables will be overestimated (underestimated) if d^2LAI/dt^2 < 0 (> 0)
+                    LAI_prev = LAI - (LAI - LAI_prev_day)/(24/dt_hr)
+                } else {
+                    LAI_prev = 0
+                }
+            }
             
             ####################################################################
             
@@ -430,10 +676,16 @@ f_simulate_ij = function(IJ) {
                # Assume spherical leaf orientation if K_b cannot be found:
                if (is.na(K_b)) K_b = min(c(0.5/coz_SZA, 1e6), na.rm=TRUE)
                # Absorption of direct beam and diffuse radiation by sunlit and shaded leaves (0-1):
-               I_beam_sun = canopy_albedo$I_beam_sun
-               I_diff_sun = canopy_albedo$I_diff_sun
-               I_beam_sha = canopy_albedo$I_beam_sha
-               I_diff_sha = canopy_albedo$I_diff_sha
+               # Handle the exceptions for prognostic crop in biogeochem. When LAI and SAI == 0 before planting, these outputs are NaN. (Pang, Jun 2019)
+               # I_beam_sun = canopy_albedo$I_beam_sun
+               # I_diff_sun = canopy_albedo$I_diff_sun
+               # I_beam_sha = canopy_albedo$I_beam_sha
+               # I_diff_sha = canopy_albedo$I_diff_sha
+               I_beam_sun = ifelse(test = biogeochem_flag && LAI == 0, yes = 0, no = canopy_albedo$I_beam_sun)
+               I_diff_sun = ifelse(test = biogeochem_flag && LAI == 0, yes = 0, no = canopy_albedo$I_diff_sun)
+               I_beam_sha = ifelse(test = biogeochem_flag && LAI == 0, yes = 0, no = canopy_albedo$I_beam_sha)
+               I_diff_sha = ifelse(test = biogeochem_flag && LAI == 0, yes = 0, no = canopy_albedo$I_diff_sha)
+               
                # Find absorbed PAR:
                PAR_absorb = f_PAR_absorb(PAR_beam=PAR_beam, PAR_diff=PAR_diff, 
                                          LAI=LAI, SAI=LAI, K_b=K_b, 
@@ -449,9 +701,12 @@ f_simulate_ij = function(IJ) {
                if (is.na(phi_sha)) phi_sha = 0
                # Now calculate LAI_sun and LAI_sha explicitly from plant area index from f_PAR_absorb() (Tai, Feb 2019).
                # Sunlit leaf area index:
-               LAI_sun = PAR_absorb$PAI_sun*LAI/(LAI + SAI)
+               # Handle the exception for prognostic crops. When the crops are not planted, LAI and SAI are zero. (Pang, Jun 2019)
+               # LAI_sun = PAR_absorb$PAI_sun*LAI/(LAI + SAI)
+               LAI_sun = if (LAI != 0 || SAI != 0) {PAR_absorb$PAI_sun*LAI/(LAI + SAI)} else {LAI_sun = 0}
                # Shaded leaf area index:
-               LAI_sha = PAR_absorb$PAI_sha*LAI/(LAI + SAI)
+               # LAI_sha = PAR_absorb$PAI_sha*LAI/(LAI + SAI)
+               LAI_sha = if (LAI != 0 || SAI != 0) {PAR_absorb$PAI_sha*LAI/(LAI + SAI)} else {LAI_sha = 0}
                # Surface albedo for visible light:
                surf_alb_beam = canopy_albedo$I_beam_up
                surf_alb_diff = canopy_albedo$I_diff_up
@@ -495,7 +750,6 @@ f_simulate_ij = function(IJ) {
             beta_t = f_water_stress(soil_wetness=soil_wetness_root, 
                                     psi_sat=psi_sat, b_psi=b_psi, 
                                     psi_c=psi_c, psi_o=psi_o)
-            
             # Find canopy photosynthesis:
             canopy_photosyn = f_canopy_photosyn(c_a=c_a, e_a=e_a, 
                                                 phi_sun=phi_sun, 
@@ -530,7 +784,7 @@ f_simulate_ij = function(IJ) {
                                                 leaf_N_conc=leaf_N_conc, 
                                                 u_leaf=u_leaf, d_leaf=d_leaf, 
                                                 met_cond=met_cond_flag, 
-                                                tol=1e-3, g1_med=g1_med)
+                                                tol=1e-3)
             
             # Total absorbed PAR (W m^-2):
             PAR_tot = phi_sun * LAI_sun + phi_sha * LAI_sha
@@ -631,7 +885,141 @@ f_simulate_ij = function(IJ) {
                   
                }
                
+            
             }
+            
+            #  Calculate biogeochemistry
+            if (biogeochem_flag) {
+                
+                # Maintenance respiration (hourly)
+                # CN ratios depend on phenology for crops,
+                if (!crop || (crop && !grain_fill_flag)) {
+                    leaf_cn_ratio = leaf_cn
+                    fineroot_cn_ratio = froot_cn
+                    coarseroot_cn_ratio = liveWood_cn
+                    stem_cn_ratio = liveWood_cn
+                    grain_cn_ratio = grain_cn
+                } else if (crop && grain_fill_flag){
+                    leaf_cn_ratio = leaf_cn_final
+                    fineroot_cn_ratio = froot_cn_final
+                    coarseroot_cn_ratio = liveWood_cn
+                    stem_cn_ratio = stem_cn_final
+                    grain_cn_ratio = grain_cn
+                }
+                
+                maintenance_respiration_fluxes = f_maintenance_respiration_fluxes(woody.flag = woody_flag, root_frac_cnst_a = root_a_par, root_frac_cnst_b = root_b_par,
+                                                                                  soil_depth_array = soil_layer_depth, T_soil_array = T_soil_array_input, T_2M = T_2m,
+                                                                                  leaf_N = leaf_C / leaf_cn_ratio, livestem_N = livestem_C / stem_cn_ratio, livecoarseroot_N = livecoarseroot_C / coarseroot_cn_ratio, fineroot_N = fineroot_C / fineroot_cn_ratio, grain_N = grain_C / grain_cn_ratio,
+                                                                                  root_fraction_array = root_frac_array)              
+                
+                single_timestep_mr = maintenance_respiration_fluxes$mr_total
+                single_timestep_An = canopy_photosyn$A_can
+
+                if (h == 1){
+                    dailyMean_An = 0
+                    dailyMean_mr = 0
+                }
+                
+                dailyMean_An = dailyMean_An + single_timestep_An
+                dailyMean_mr = dailyMean_mr + single_timestep_mr
+                
+                # daily mean GPP and MR
+                if (h == 24/dt_hr) {
+                    dailyMean_An = dailyMean_An / (24/dt_hr)
+                    dailyMean_mr = dailyMean_mr / (24/dt_hr)
+                    # print(paste0('[simulated_ij.R] dailyMean_An = ', signif(dailyMean_An * 12.011e-6,4), ' gCm-2s-1  dailyMean_mr = ', signif(dailyMean_mr,4),' gCm-2s-1'))
+                    
+                }
+                
+                # Phenology, biomass partitioning, plant physiology (daily)
+                if (h == 24/dt_hr){
+                    
+                    # Plant phenology and biomass partitioning
+                    if (evergreen_flag) {
+                        evergreen_phenology = f_evergreen_phenology()
+                        evergreen_allocation_fluxes = f_evergreen_allocation_fluxes()
+                    } else if (stress_decid_flag) {
+                        stress_deciduous_phenology = f_stress_deciduous_phenology()
+                        stress_deciduous_allocation_fluxes = f_stress_deciduous_allocation_fluxes()
+                    } else if (season_decid_flag) {
+                        seasonal_deciduous_phenology = f_seasonal_deciduous_phenology()
+                        seasonal_deciduous_allocation = f_seasonal_deciduous_allocation_fluxes()
+                    } else if (crop_flag && !stress_decid_flag){
+                        # prescribed_planting_date_readin are required if get_planting_date_option == 'prescribed-map' or 'prescribed-site'
+                        # GDDx_20yr are required if get_GDDmat_method == 'CLM4.5'
+                        # GDDmat_M/S/W are requried if get_GDDmat_method == 'Sack'
+                        at_NH_flag = ifelse(test = lat[j] >= 0, yes = TRUE, no = FALSE)
+                        
+                        crop_phenology = f_crop_phenology(T_10_d = T_10d, T_min_10_d = Tmin_10d, T_soil = T_soil1, T2m = T_2m,
+                                                          leafC = leaf_C, livestemC = livestem_C, finerootC = fineroot_C, grainC = grain_C, LAI = LAI, SAI = SAI,
+                                                          GDD_T2m = GDDT2m, GDD_Tsoil = GDDTsoil, GDDmat = GDD_mat, GDDrepr = GDD_repr, GDDemer = GDD_emer,
+                                                          crop_living_flag = crop_live_flag, crop_planting_flag = crop_plant_flag, leaf_emer_flag = leaf_emergence_flag, grain_filling_flag = grain_fill_flag, harvesting_flag = harvest_flag,
+                                                          prescribed_planting_date_readin = if (get_planting_date_option != 'CLM4.5') {prescribed_planting_date} else {NULL}, planting_jday = day_of_planting, harvest_jday = day_of_harvest,
+                                                          GDD0_20yr = ifelse(exists("GDD0"), yes = GDD0, no = NULL), GDD8_20yr = ifelse(exists("GDD8"), yes = GDD8, no = 10), GDD10_20yr = ifelse(exists("GDD10"), yes = GDD10, no = NULL),
+                                                          GDDmat_M = ifelse(exists("GDDmat_maize"), yes = GDDmat_maize, no = NULL), GDDmat_S = ifelse(exists("GDDmat_soybean"), yes = GDDmat_soybean, no = NULL), GDDmat_W = ifelse(exists("GDDmat_wheat"), yes = GDDmat_wheat, no = NULL),
+                                                          hybgdd = GDDmat_max, GDD_baseT = GDD_base_T, GDD_maxIncrease = GDDT2m_change_max, max_growing_season_length = crop_season_length_max, leaf_longevity = leaflong, T_plant_req = avg_T_planting_req, T_min_plant_req = min_T_planting_req,
+                                                          prescribed_min_plant_jday = ifelse(test = at_NH_flag, yes = earliest_planting_doy_NH, no = earliest_planting_doy_SH), prescribed_max_plant_jday = ifelse(test = at_NH_flag, yes = latest_planting_doy_NH, no = latest_planting_doy_SH),
+                                                          at_NH_flag = at_NH_flag, ipft = ipft)
+                        
+                        # Receive the outputs from the function using assign() instead of explictly writing them out if the function has mutliple outputs (>10)
+                        # i.e. assign(x = simulateIJ_crop_phenology_variable_name, value = f_crop_phenology[[f_crop_phenology_output_listvariable_name]])
+                        simulateIJ_crop_phenology_variable_name = c("crop_emergence_flux","leaf_C_loss_flux","grain_C_loss_flux","livestem_C_loss_flux","fineroot_C_loss_flux",
+                                                                    "crop_live_flag","crop_plant_flag","leaf_emergence_flag","grain_fill_flag","harvest_flag",
+                                                                    "day_of_planting","day_of_harvest",
+                                                                    "GDDT2m","GDDTsoil", "GDD_mat", "GDD_repr", "GDD_emer",
+                                                                    "leaf_C","grain_C","fineroot_C","livestem_C","LAI","SAI")
+                        f_crop_phenology_output_listvariable_name = c("seedC_to_leafC_flux","leafC_loss_flux","grainC_loss_flux","livestemC_loss_flux", "finerootC_loss_flux",
+                                                                      "croplive_flag", "cropplant_flag","leafemergence_flag","grainfill_flag", "har_flag",
+                                                                      "planting_julianday","harvesting_julianday",
+                                                                      "GDD_T2m","GDD_Tsoil", "GDDmat", "GDDrepr", "GDDemer",
+                                                                      "leafC","grainC","finerootC","livestemC","LAI_out","SAI_out")
+                        
+                        # print(paste0('[simulated.ij] after crop_phenology leafC = ', signif(leaf_C, 5)))
+                        
+                        if (length(simulateIJ_crop_phenology_variable_name) != length(f_crop_phenology_output_listvariable_name)){stop("[simulate_ij.R f_crop_phenology] length(simulateIJ_crop_phenology_variable_name) != length(f_crop_phenology_output_listvariable_name)")}
+                        for (z in seq(simulateIJ_crop_phenology_variable_name)){assign(x = simulateIJ_crop_phenology_variable_name[z], value = crop_phenology[[f_crop_phenology_output_listvariable_name[z]]])}
+                        rm(z, simulateIJ_crop_phenology_variable_name, f_crop_phenology_output_listvariable_name)
+                        
+                        crop_allocation_fluxes = f_crop_allocation_fluxes(A_can_umolm2s1 = dailyMean_An, mr_total = dailyMean_mr, gr_fraction = 0.3, 
+                                                                          GDDmat = GDD_mat, GDD_T2m = GDDT2m, GDD_Tsoil = GDDTsoil, GDDemer = GDD_emer, GDDrepr = GDD_repr, crop_living_flag = crop_live_flag, peak_lai_flag = peak_LAI_flag, grain_filling_flag = grain_fill_flag,
+                                                                          astem_leafem = a_stem_leafem, aleaf_leafem = a_leaf_leafem, aleaf = a_leaf, astem = a_stem,
+                                                                          bfact = b_factor, arooti = a_root_initial, arootf = a_root_final, astemf = a_stem_final, declfact = GDD_decline_factor, allconss = a_stem_alloc_power, aleaff = a_leaf_final, allconsl = a_leaf_alloc_power, lfemerg = emer_GDDpercent, fleafi = a_leaf_base)
+                        simulateIJ_crop_allocation_variable_name = c("leaf_C_alloc_flux","fineroot_C_alloc_flux","livestem_C_alloc_flux","deadstem_C_alloc_flux","livecoarseroot_C_alloc_flux","deadcoarseroot_C_alloc_flux","grain_C_alloc_flux",
+                                                                     "a_stem","a_leaf","a_root","a_repr","a_stem_leafem","a_leaf_leafem")
+                        f_crop_allocation_output_listvariable_name = c("leaf_carbon_partitioning_flux_gCm2s1","fineroot_carbon_partitioning_flux_gCm2s1","livestem_carbon_partitioning_flux_gCm2s1","deadstem_carbon_partitioning_flux_gCm2s1","livecoarseroot_carbon_partitioning_flux_gCm2s1","deadcoarseroot_carbon_partitioning_flux_gCm2s1","grain_carbon_partitioning_flux_gCm2s1",
+                                                                       "astem","aleaf","aroot","arepr","astem_em","aleaf_em")
+                        if (length(simulateIJ_crop_allocation_variable_name) != length(f_crop_allocation_output_listvariable_name)){stop("[simulate_ij.R f_crop_phenology] length(simulateIJ_crop_allocation_variable_name) != length(f_crop_allocation_output_listvariable_name)")}
+                        for (z in seq(simulateIJ_crop_allocation_variable_name)) {assign(x = simulateIJ_crop_allocation_variable_name[z], value = crop_allocation_fluxes[[f_crop_allocation_output_listvariable_name[z]]])}
+                        rm(z, simulateIJ_crop_allocation_variable_name, f_crop_allocation_output_listvariable_name)
+                    }
+                    
+                    
+                    
+                    # Plant carbon pool addition and substraction
+                    plant_Cpool_addition_subtraction = f_Cpool_addition_subtraction(grain_filling_flag = grain_fill_flag, harvesting_flag = harvest_flag, ipft = ipft,
+                                                                                    leaf_C_prev = leaf_C,         leaf_C_biomass_partitioning_flux_gCm2s1 = leaf_C_alloc_flux,                     leaf_C_loss_flux_gCm2s1 = leaf_C_loss_flux,         seedC_to_leafC_flux_gCm2s1 = crop_emergence_flux,
+                                                                                    livestem_C_prev = livestem_C, livestem_C_biomass_partitioning_flux_gCm2s1 = livestem_C_alloc_flux,             livestem_C_loss_flux_gCm2s1 = livestem_C_loss_flux,
+                                                                                    deadstem_C_prev = 0,          deadstem_C_biomass_partitioning_flux_gCm2s1 = deadstem_C_alloc_flux,             deadstem_C_loss_flux_gCm2s1 = 0,
+                                                                                    livecoarseroot_C_prev = 0,    livecoarseroot_C_biomass_partitioning_flux_gCm2s1 = livecoarseroot_C_alloc_flux, livecoarseroot_C_loss_flux_gCm2s1 = 0,
+                                                                                    deadcoarseroot_C_prev = 0,    deadcoarseroot_C_biomass_partitioning_flux_gCm2s1 = deadcoarseroot_C_alloc_flux, deadcoarseroot_C_loss_flux_gCm2s1 = 0,
+                                                                                    fineroot_C_prev = fineroot_C, fineroot_C_biomass_partitioning_flux_gCm2s1 = fineroot_C_alloc_flux,             fineroot_C_loss_flux_gCm2s1 = fineroot_C_loss_flux,
+                                                                                    grain_C_prev = grain_C,       grain_C_biomass_partitioning_flux_gCm2s1 = grain_C_alloc_flux,                   grain_C_loss_flux_gCm2s1 = grain_C_loss_flux)
+                    
+                    leaf_C = plant_Cpool_addition_subtraction$leaf_C_new
+                    # fineroot_C = plant_Cpool_addition_subtraction$fineroot_C_new
+                    # livestem_C = plant_Cpool_addition_subtraction$livestem_C_new
+                    deadstem_C = plant_Cpool_addition_subtraction$deadstem_C_new
+                    # livecoarseroot_C = plant_Cpool_addition_subtraction$livecoarseroot_C_new
+                    # deadcoarseroot_C = plant_Cpool_addition_subtraction$deadcoarseroot_C_new
+                    # grain_C = plant_Cpool_addition_subtraction$grain_C_new
+                    
+                    # Plant physiology
+                    vegetation_structure = f_vegetation_structure(slatop = sla_top, dsladlai = dsla_dlai, laimx = LAI_max, woody = woody_flag, crop = crop_flag, ipft = ipft, ztopmx = ztopmax,
+                                                                  leafC = leaf_C, deadstemC = deadstem_C, tlai = LAI, tsai = SAI, peak_lai_flag = peak_LAI_flag, harvesting_flag = harvest_flag, crop_living_flag = crop_live_flag)
+                    
+                }
+                
+            } # End of biogeochemistry simulation
             
             # Outputs (i.e., history data):
             output_assign_df = `colnames<-`(rbind.data.frame(
@@ -687,22 +1075,97 @@ f_simulate_ij = function(IJ) {
                # Dataframe settings
                stringsAsFactors = FALSE), c('output_hist_name', 'assign_string'))
             
+            # Additional outputs in biogeochemistry mode
+            if (biogeochem_flag) {
+                if (evergreen_flag) {
+                    alloc_prefix = 'evergreen_allocation_fluxes'
+                } else if (season_decid_flag) {
+                    alloc_prefix = 'seasonal_deciduous_allocation_fluxes'
+                } else if (stress_decid_flag) {
+                    alloc_prefix = 'stress_deciduous_allocation_fluxes'
+                } else if (crop_flag && !stress_decid_flag){
+                    alloc_prefix = 'crop_allocation_fluxes'
+                }
+                
+                output_assign_df = rbind.data.frame(output_assign_df,
+                                                    # Maintenance respiration
+                                                    c('mr_leaf_PFT_hist_ijd','maintenance_respiration_fluxes$mr_leaf'),
+                                                    c('mr_fineroot_PFT_hist_ijd','maintenance_respiration_fluxes$mr_fineroot'),
+                                                    c('mr_livestem_PFT_hist_ijd','maintenance_respiration_fluxes$mr_livestem'),
+                                                    c('mr_livecoarseroot_PFT_hist_ijd','maintenance_respiration_fluxes$mr_coarseroot'),
+                                                    c('mr_grain_PFT_hist_ijd','maintenance_respiration_fluxes$mr_grain'),
+                                                    c('mr_total_PFT_hist_ijd','maintenance_respiration_fluxes$mr_total'),
+                                                    # Physiology
+                                                    c('LAI_PFT_hist_ijd','vegetation_structure$tlai'),
+                                                    c('SAI_PFT_hist_ijd','vegetation_structure$tsai'),
+                                                    c('htop_PFT_hist_ijd','vegetation_structure$canopy_top'),
+                                                    c('hbot_PFT_hist_ijd','vegetation_structure$canopy_bottom'),
+                                                    # C pools
+                                                    c('leafC_PFT_hist_ijd', 'plant_Cpool_addition_subtraction$leaf_C_new'),
+                                                    c('finerootC_PFT_hist_ijd', 'plant_Cpool_addition_subtraction$fineroot_C_new'),
+                                                    c('livestemC_PFT_hist_ijd', 'plant_Cpool_addition_subtraction$livestem_C_new'),
+                                                    c('deadstemC_PFT_hist_ijd', 'plant_Cpool_addition_subtraction$deadstem_C_new'),
+                                                    c('livecoarserootC_PFT_hist_ijd', 'plant_Cpool_addition_subtraction$livecoarseroot_C_new'),
+                                                    c('deadcoarserootC_PFT_hist_ijd', 'plant_Cpool_addition_subtraction$deadcoarseroot_C_new'),
+                                                    c('grainC_PFT_hist_ijd', 'plant_Cpool_addition_subtraction$grain_C_new'),
+                                                    # GPP, NPP, biomass partitioning fluxes and respirations
+                                                    c('GPP_PFT_hist_ijd', paste0(alloc_prefix,'$daily_mean_GPP')),
+                                                    c('NPP_PFT_hist_ijd', paste0(alloc_prefix,'$daily_mean_NPP')),
+                                                    c('leafC_alloc_PFT_hist_ijd', paste0(alloc_prefix,'$leaf_carbon_partitioning_flux_gCm2s1')),
+                                                    c('finerootC_alloc_PFT_hist_ijd', paste0(alloc_prefix,'$fineroot_carbon_partitioning_flux_gCm2s1')),
+                                                    c('livestemC_alloc_PFT_hist_ijd', paste0(alloc_prefix,'$livestem_carbon_partitioning_flux_gCm2s1')),
+                                                    c('deadstemC_alloc_PFT_hist_ijd', paste0(alloc_prefix,'$deadstem_carbon_partitioning_flux_gCm2s1')),
+                                                    c('livecoarserootC_alloc_PFT_hist_ijd', paste0(alloc_prefix,'$livecoarseroot_carbon_partitioning_flux_gCm2s1')),
+                                                    c('deadcoarserootC_alloc_PFT_hist_ijd', paste0(alloc_prefix,'$deadcoarseroot_carbon_partitioning_flux_gCm2s1')),
+                                                    c('grainC_alloc_PFT_hist_ijd', paste0(alloc_prefix,'$grain_carbon_partitioning_flux_gCm2s1')),
+                                                    # Crop phenology and flags
+                                                    c('GDDT2m_PFT_hist_ijd', ifelse(test = ipft < 18, yes = as.character(NA), no = 'crop_phenology$GDD_T2m')),
+                                                    c('GDDTsoil_PFT_hist_ijd', ifelse(test = ipft < 18, yes = as.character(NA), no = 'crop_phenology$GDD_Tsoil')),
+                                                    c('GDDmat_PFT_hist_ijd', ifelse(test = ipft < 18, yes = as.character(NA), no = 'crop_phenology$GDDmat')),
+                                                    c('GDDrepr_PFT_hist_ijd', ifelse(test = ipft < 18, yes = as.character(NA), no = 'crop_phenology$GDDrepr')),
+                                                    c('GDDemer_PFT_hist_ijd', ifelse(test = ipft < 18, yes = as.character(NA), no = 'crop_phenology$GDDemer')),
+                                                    c('crop_live_flag_PFT_hist_ijd', ifelse(test = ipft < 18, yes = as.character(FALSE), no = 'crop_phenology$croplive_flag')),
+                                                    c('crop_plant_flag_PFT_hist_ijd', ifelse(test = ipft < 18, yes = as.character(FALSE), no = 'crop_phenology$cropplant_flag')),
+                                                    c('leaf_emergence_flag_PFT_hist_ijd', ifelse(test = ipft < 18, yes = as.character(FALSE), no = 'crop_phenology$leafemergence_flag')),
+                                                    c('grain_fill_flag_PFT_hist_ijd', ifelse(test = ipft < 18, yes = as.character(FALSE), no = 'crop_phenology$grainfill_flag')),
+                                                    c('harvest_flag_PFT_hist_ijd', ifelse(test = ipft < 18, yes = as.character(FALSE), no = 'crop_phenology$har_flag')),
+                                                    c('peak_LAI_flag_PFT_hist_ijd', ifelse(test = ipft < 18, yes = as.character(FALSE), no = 'vegetation_structure$peak_lai_flag')),
+                                                    c('day_of_planting_PFT_hist_ijd', ifelse(test = ipft < 18, yes = as.character(NA), no = 'crop_phenology$planting_julianday')),
+                                                    c('day_of_harvesting_PFT_hist_ijd', ifelse(test = ipft < 18, yes = as.character(NA), no = 'crop_phenology$harvesting_julianday')),
+                                                    # Allocation coefficients
+                                                    c('aleaf_PFT_hist_ijd', ifelse(test = ipft < 18, yes = as.character(NA), no = 'crop_allocation_fluxes$aleaf')),
+                                                    c('aleaf_leafem_PFT_hist_ijd', ifelse(test = ipft < 18, yes = as.character(NA), no = 'crop_allocation_fluxes$aleaf_em')),
+                                                    c('astem_PFT_hist_ijd', ifelse(test = ipft < 18, yes = as.character(NA), no = 'crop_allocation_fluxes$astem')),
+                                                    c('astem_leafem_PFT_hist_ijd', ifelse(test = ipft < 18, yes = as.character(NA), no = 'crop_allocation_fluxes$astem_em')),
+                                                    c('aroot_PFT_hist_ijd', ifelse(test = ipft < 18, yes = as.character(NA), no = 'crop_allocation_fluxes$aroot')),
+                                                    c('arepr_PFT_hist_ijd', ifelse(test = ipft < 18, yes = as.character(NA), no = 'crop_allocation_fluxes$arepr'))
+                )
+            }
+            
             # Assign outputs: 
             for (ivar in seq_along(var_name$variable_name)) {
-               output_var =  paste0(var_name$variable_name[ivar], if (var_name$res_level[ivar] == 'PFT') '_PFT_hist_ijd' else if (var_name$res_level[ivar] == 'grid') '_hist_ijd')
-               current_assign = output_assign_df[match(output_var, output_assign_df$output_hist_name),]
-               temp_var = get(current_assign$output_hist_name)
-               if (var_name$res_level[ivar] == 'PFT') {
-                  temp_var[ipft,h] = eval(parse(text = current_assign$assign_string))
-               } else if (var_name$res_level[ivar] == 'grid') {
-                  temp_var[h] = eval(parse(text = current_assign$assign_string))
+               output_var =  paste0(var_name$variable_name[ivar], if (any(var_name$res_level[ivar] == c('PFT', 'PFT_daily'))) '_PFT_hist_ijd' else if (var_name$res_level[ivar] == 'grid') '_hist_ijd')
+               
+               # Assigning PFT_daily variables only at the last timestep, other types of variable are not affected
+               if (var_name$res_level[ivar] != 'PFT_daily' || h == 24/dt_hr) {
+                   current_assign = output_assign_df[match(output_var, output_assign_df$output_hist_name),]
+                   temp_var = get(current_assign$output_hist_name)
+                   
+                   if (var_name$res_level[ivar] == 'PFT') {
+                       temp_var[ipft,h] = eval(parse(text = current_assign$assign_string))
+                   } else if (var_name$res_level[ivar] == 'grid') {
+                       temp_var[h] = eval(parse(text = current_assign$assign_string))
+                   } else if (var_name$res_level[ivar] == 'PFT_daily'){
+                       temp_var[ipft] = eval(parse(text = current_assign$assign_string))
+                   }    
+                   assign(x = current_assign$output_hist_name, value = temp_var)
                }
-               assign(x = current_assign$output_hist_name, value = temp_var)
             }
-            rm(ivar, output_var, current_assign)
             
+            rm(ivar, output_var, current_assign)
             # Assign missing essential outputs needed for next time step:
             # Cumulative ozone uptake:
+            # 
             if (O3_damage_flag) {
                for (out_var in c('CUO_sun_PFT_hist_ijd', 'CUO_sha_PFT_hist_ijd')) {
                   current_assign = output_assign_df[match(out_var, output_assign_df$output_hist_name),]
@@ -712,20 +1175,71 @@ f_simulate_ij = function(IJ) {
                }
                rm(out_var, current_assign)
             }
+            
+            if (biogeochem_flag && h == 24/dt_hr) {
+                BGC_temp_var_vec = c('LAI_PFT_hist_ijd', 'SAI_PFT_hist_ijd', 'leafC_PFT_hist_ijd', 'finerootC_PFT_hist_ijd', 'livestemC_PFT_hist_ijd', 'deadstemC_PFT_hist_ijd', 'livecoarserootC_PFT_hist_ijd', 'deadcoarserootC_PFT_hist_ijd', 'grainC_PFT_hist_ijd',
+                                     'GDDT2m_PFT_hist_ijd', 'GDDTsoil_PFT_hist_ijd', 'GDDmat_PFT_hist_ijd', 'GDDemer_PFT_hist_ijd', 'GDDrepr_PFT_hist_ijd',
+                                     'crop_live_flag_PFT_hist_ijd', 'crop_plant_flag_PFT_hist_ijd', 'leaf_emergence_flag_PFT_hist_ijd', 'grain_fill_flag_PFT_hist_ijd', 'harvest_flag_PFT_hist_ijd', 'peak_LAI_flag_PFT_hist_ijd',
+                                     'day_of_planting_PFT_hist_ijd', 'day_of_harvesting_PFT_hist_ijd', 'astem_PFT_hist_ijd', 'aleaf_PFT_hist_ijd', 'astem_leafem_PFT_hist_ijd', 'aleaf_leafem_PFT_hist_ijd')
+                for (out_var in BGC_temp_var_vec) {
+                    current_assign = output_assign_df[match(out_var, output_assign_df$output_hist_name),]
+                    temp_var = get(current_assign$output_hist_name)
+                    temp_var[ipft] = eval(parse(text = current_assign$assign_string))
+                    assign(x = current_assign$output_hist_name, value = temp_var)
+                }
+                rm(out_var, current_assign, BGC_temp_var_vec)
+            }
          }
          # End of simulation for all hours.
       }
    }
-   
+
    # End of simulation for all PFTs for a single lon/lat.
    success = TRUE
    
    # Save temporary data needed for next time step:
    temp_env = new.env()
    temp_env$T_daily_ijd = T_daily
+   temp_env$T_dailymin_ijd = Tmin_daily
    if (O3_damage_flag) {
       temp_env$CUO_sun_PFT_lasthd_ijd = CUO_sun_PFT_hist_ijd[,24/dt_hr]
       temp_env$CUO_sha_PFT_lasthd_ijd = CUO_sha_PFT_hist_ijd[,24/dt_hr]
+   }
+   
+   if (biogeochem_flag) {
+       # variables need to be transfered for the next time step in BGC mode
+       # Physiology
+       temp_env$tlai_PFT_lasthd_ijd = LAI_PFT_hist_ijd
+       temp_env$tsai_PFT_lasthd_ijd = SAI_PFT_hist_ijd
+
+       # Cpool
+       temp_env$leafC_PFT_lasthd_ijd = leafC_PFT_hist_ijd
+       temp_env$frootC_PFT_lasthd_ijd = finerootC_PFT_hist_ijd
+       temp_env$livestemC_PFT_lasthd_ijd = livestemC_PFT_hist_ijd
+       temp_env$deadstemC_PFT_lasthd_ijd = deadstemC_PFT_hist_ijd
+       temp_env$livecrootC_PFT_lasthd_ijd = livecoarserootC_PFT_hist_ijd
+       temp_env$deadcrootC_PFT_lasthd_ijd = deadcoarserootC_PFT_hist_ijd
+       temp_env$grainC_PFT_lasthd_ijd = grainC_PFT_hist_ijd
+       # GDD, phenology flags and day of planting/harvesting
+       temp_env$GDDT2m_PFT_lasthd_ijd = GDDT2m_PFT_hist_ijd
+       temp_env$GDDTsoil_PFT_lasthd_ijd = GDDTsoil_PFT_hist_ijd
+       temp_env$GDDmat_PFT_lasthd_ijd = GDDmat_PFT_hist_ijd
+       temp_env$GDDemer_PFT_lasthd_ijd = GDDemer_PFT_hist_ijd
+       temp_env$GDDrepr_PFT_lasthd_ijd = GDDrepr_PFT_hist_ijd
+       temp_env$crop_live_flag_PFT_lasthd_ijd = crop_live_flag_PFT_hist_ijd
+       temp_env$crop_plant_flag_PFT_lasthd_ijd = crop_plant_flag_PFT_hist_ijd
+       temp_env$leaf_emergence_flag_lasthd_ijd = leaf_emergence_flag_PFT_hist_ijd
+       temp_env$grain_fill_flag_lasthd_ijd = grain_fill_flag_PFT_hist_ijd
+       temp_env$harvest_flag_lasthd_ijd = harvest_flag_PFT_hist_ijd
+       temp_env$peak_LAI_flag_lasthd_ijd = peak_LAI_flag_PFT_hist_ijd
+       temp_env$planting_jday_lasthd_ijd = day_of_planting_PFT_hist_ijd
+       temp_env$harvesting_jday_lasthd_ijd = day_of_harvesting_PFT_hist_ijd
+       # Allocation coefficients
+       temp_env$astem_PFT_lasthd_ijd = astem_PFT_hist_ijd
+       temp_env$aleaf_PFT_lasthd_ijd = aleaf_PFT_hist_ijd
+       temp_env$astem_leafem_PFT_lasthd_ijd = astem_leafem_PFT_hist_ijd
+       temp_env$aleaf_leafem_PFT_lasthd_ijd = aleaf_leafem_PFT_hist_ijd
+           
    }
    filename = paste0(simulation_dir, 'temp_data/temp_', YYYY, MM, DD, '/temp_i', i_str, '_j', j_str, '.RData')
    save(list = ls(temp_env), envir = temp_env, file=filename)
@@ -737,8 +1251,8 @@ f_simulate_ij = function(IJ) {
    output_list_name = c()
    for (ivar in seq_along(var_name$variable_name)){
       current_var = var_name$variable_name[ivar]
-      output[[var_name$variable_name[ivar]]] = get(paste0(current_var, ifelse(var_name$res_level[ivar] == 'PFT', '_PFT', ''), '_hist_ijd'))
-      output_list_name = c(output_list_name, paste0(current_var, ifelse(var_name$res_level[ivar] == 'PFT', '_PFT', ''), '_hist'))
+      output[[var_name$variable_name[ivar]]] = get(paste0(current_var, ifelse(any(var_name$res_level[ivar] == c('PFT', 'PFT_daily')), '_PFT', ''), '_hist_ijd'))
+      output_list_name = c(output_list_name, paste0(current_var, ifelse(any(var_name$res_level[ivar] ==  c('PFT', 'PFT_daily')), '_PFT', ''), '_hist'))
    }
    names(output) = output_list_name
    output[["success"]] = success
@@ -794,7 +1308,13 @@ f_hist_reshape = function(ij, hist_ij, err_check_only=FALSE) {
       } else {
          if (!err_check_only) {
             for (v in 1:nrow(var_name)) {
-               if (var_name[v,4] != 'PFT') hist_grid[ind_i,ind_j,1,,v] = hist_ij[[n]][[v]] else hist_grid[ind_i,ind_j,,,v] = hist_ij[[n]][[v]]
+               if (var_name[v,4] == 'grid') {
+                   hist_grid[ind_i,ind_j,1,,v] = hist_ij[[n]][[v]] 
+               } else if (var_name[v,4] == 'PFT') {
+                   hist_grid[ind_i,ind_j,,,v] = hist_ij[[n]][[v]]
+               } else if (var_name[v,4] == 'PFT_daily'){
+                   hist_grid[ind_i,ind_j,,24,v] = hist_ij[[n]][[v]]
+               }
             }
          }
       }

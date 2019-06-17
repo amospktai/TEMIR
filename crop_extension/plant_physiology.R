@@ -1,5 +1,5 @@
-f_vegetation_structure = function(slatop, dsladlai, laimx, woody, crop, ipft, 
-                                  leafC, deadstemC, tlai = LAI, tsai = SAI){
+f_vegetation_structure = function(slatop, dsladlai, laimx, woody, crop, ipft, ztopmx,
+                                  leafC, deadstemC, tlai = LAI, tsai = SAI, peak_lai_flag, harvesting_flag, crop_living_flag){
     # constants used in CLM4.5
     taper = 200            # height/radius of wood
     stocking = 0.1         # no. individual/m2
@@ -17,10 +17,10 @@ f_vegetation_structure = function(slatop, dsladlai, laimx, woody, crop, ipft,
       } else { # crops, grasses
         tlai = slatop * leafC
         if (ipft >= 18 && ipft <= 25) {
-          if (!remove_LAI_cap && tlai > laimx){
-            peak_LAI_flag == T
+          if (limit_crop_LAI_flag && tlai > laimx){
+              peak_lai_flag == T
           } else {
-            peak_LAI_flag == F
+              peak_lai_flag == F
           }
         }
       }
@@ -39,7 +39,7 @@ f_vegetation_structure = function(slatop, dsladlai, laimx, woody, crop, ipft,
         tsai_min = 1 * 0.5
         tsai = max(tsai_alpha * tsai_old + max(tlai_old - tlai,0) ,tsai_min)
       } else { # prognostic crops
-        if (harvest_flag == T && tlai < 1e-4){ # after harvesting, SAI = 0.25
+        if (harvesting_flag && tlai < 1e-4){ # after harvesting, SAI = 0.25
           tsai = 0.25
         } else if (ipft == 18 || ipft == 19){ # maize
           tsai = 0.1 * tlai
@@ -70,7 +70,7 @@ f_vegetation_structure = function(slatop, dsladlai, laimx, woody, crop, ipft,
           h_bottom = max(0,min(0.05,h_top-0.2))
         }
       } else { #prognostic crops
-        if (croplive_flag){
+        if (crop_living_flag){
           h_top = ztopmx * min(tlai/laimx-1,1)^2
           h_top = max(0.05, h_top)
           h_bottom = 0.02  
@@ -90,6 +90,8 @@ f_vegetation_structure = function(slatop, dsladlai, laimx, woody, crop, ipft,
     } else {
       output = list(tlai = tlai, tsai = tsai, canopy_top = h_top, canopy_bottom = h_bottom, peak_lai_flag = F)
     }
+    
+    print(paste0('[physiology] LAI = ',tlai))
     return(output)
 }
 

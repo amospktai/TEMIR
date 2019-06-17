@@ -49,7 +49,7 @@ irrigated = ncvar_get(nc, 'irrigated')
 # Leaf longevity (yr):
 leaf_long = ncvar_get(nc, 'leaf_long')
 # Leaf C:N (gC gN^-1):
-leafcn = ncvar_get(nc, 'leafcn')
+leafcn = ncvar_get(nc, 'leafcn'); leafcn[18:19] = 10; leafcn[20:23] = 15
 # Leaf reflectance for near-IR (0-1):
 rholnir = ncvar_get(nc, 'rholnir')
 # Leaf reflectance for visible (0-1):
@@ -88,6 +88,78 @@ woody = ncvar_get(nc, 'woody')
 xl = ncvar_get(nc, 'xl')
 # Ratio of momentum roughness length to canopy top height (0-1):
 z0mr = ncvar_get(nc, 'z0mr')
+
+if (biogeochem_flag){
+    # Leaf allocation coefficient parameter for crops
+    aleaff = ncvar_get(nc, 'aleaff')
+    allconsl = ncvar_get(nc, 'allconsl')
+    bfact = ncvar_get(nc, 'bfact')
+    fleafi = ncvar_get(nc, 'fleafi')
+    # Stem allocation coefficient parameter for crops
+    astemf = ncvar_get(nc, 'astemf'); astemf[18:19] = 0
+    allconss = ncvar_get(nc, 'allconss')
+    declfact = ncvar_get(nc, 'declfact')
+    # Root allocation coefficient parameter for crops
+    arooti = ncvar_get(nc, 'arooti')
+    arootf = ncvar_get(nc, 'arootf'); arootf[20:23] = 0      # The value should be 0 instead of NA
+    # Base temperature og GDD accumulation for crops
+    baset = ncvar_get(nc, 'baset')
+    # Allocation ratio of coarse root : live stem 
+    croot_stem = ncvar_get(nc, 'croot_stem')
+    # C:N ratio of dead wood
+    deadwdcn = ncvar_get(nc, 'deadwdcn')
+    # Allocation flag to storage pools (deciduous) or display pools (evergreen and crops)
+    fcur = ncvar_get(nc, 'fcur')
+    # C:N ratio of fine root during reproductive stage for crops
+    ffrootcn = ncvar_get(nc, 'ffrootcn'); ffrootcn[c(18:19,24:25)] = 42
+    # C:N ratio of leaf during reproductive stage for crops
+    fleafcn = ncvar_get(nc, 'fleafcn')
+    # Allocation flag to wood
+    flivewd = ncvar_get(nc, 'flivewd')
+    # C:N ratio of fine root
+    frootcn = ncvar_get(nc, 'frootcn'); frootcn[20:23] = 30
+    # Allocation ratio of fine root : leaf
+    froot_leaf = ncvar_get(nc, 'froot_leaf')
+    # C:N ratio of live stem during reproductive stage
+    fstemcn = ncvar_get(nc, 'fstemcn')
+    # C:N ratio of grain
+    graincn = ncvar_get(nc, 'graincn'); graincn[1:17] = 999; graincn[20:23] = 40; graincn[24:25] = 60  # Prevent dividing by NA for natural vegetation
+    # % of GDD_mat to reach reproductive stage
+    grnfill = ncvar_get(nc, 'grnfill')
+    # Maximum GDD_mat allowed for crops
+    hybgdd = ncvar_get(nc, 'hybgdd')
+    # Prescribed maximum LAI allowed for crops (can be removed)
+    laimx = ncvar_get(nc, 'laimx')
+    if(!limit_crop_LAI_flag){laimx[18:25] = 999}
+    # Leaf longevity (same as above)
+    leaf_long[18:19] = 1/6                     #maize leaf longetivity can be reduced to ~60 days (Wolfe et al. (1988), Agronomy Journal)
+    leaf_long[24:25] = 1/15                    #soybean leaf longetivity maybe be reduced to 20-30 days (Miyaji (1984), New Phytologist)
+    # % of GDD_mat to reach vegetative stage
+    lfemerg = ncvar_get(nc,'lfemerg')
+    # C:N ratio of leaf litter
+    lflitcn = ncvar_get(nc, 'lflitcn')
+    # C:N ratio live wood
+    livewdcn = ncvar_get(nc, 'livewdcn')
+    # Daily min planting temperature requirment (K)
+    min_planting_temp = ncvar_get(nc, 'min_planting_temp')
+    # Maximum growing season length allowed
+    mxmat = ncvar_get(nc, 'mxmat')
+    # Maximum increase in GDD_T2m allowed
+    mxtmp = ncvar_get(nc, 'mxtmp')
+    # Daily average planting temperature requirement (K)
+    planting_temp = ncvar_get(nc, 'planting_temp'); planting_temp[22:23] = 0
+    # Allocation ratio of live stem : leaf
+    stem_leaf = ncvar_get(nc, 'stem_leaf')
+    # Maximum canopy height for crops (m)
+    ztopmx = ncvar_get(nc, 'ztopmx')
+    # Earliest/lastest possible planting day in the Northern Hemisphere (julian day)
+    earliest_planting_jday_possible_NH = c(rep(NA,17), rep(91,4), rep(244,2), rep(121,2))
+    latest_planting_jday_possible_NH = c(rep(NA,17), rep(166,4), rep(334,2), rep(166,2))
+    # Earliest/lastest possible planting day in the Southern Hemisphere (julian day)
+    earliest_planting_jday_possible_SH = c(rep(NA,17), rep(274,4), rep(121,2), rep(305,2))
+    latest_planting_jday_possible_SH = c(rep(NA,17), rep(349,4), rep(151,2), rep(349,2))
+}
+
 nc_close(nc)
 
 # Canopy top height (m):
@@ -106,9 +178,6 @@ lnctop = 1/(leafcn*slatop)
 # Maximum rate of carboxylation at top of canopy at 25 degC (umol CO2 m^-2 s^-1):
 vcmax25top = lnctop*flnr*fnr*ar25
 vcmax25top[1] = 0
-
-# Parameters for Medlyn model
-g1_med_table = c(NA, 2.35, 2.35, 2.35, 4.12, 4.12, 4.45, 4.45, 4.45, 4.7, 4.7, 4.7, 2.22, 5.25, 1.62, NA, NA, 1.79, 1.79, NA, NA, NA, NA, 5.79, 5.79)
 
 ################################################################################
 ### Surface data from CLM default ncdf file:
@@ -550,7 +619,7 @@ if (LAI_data_flag) {
 
 # Linearly interpolate CLM PFT-level monthly LAI and SAI to obtain daily LAI and SAI if no user-defined LAI data are available:
 
-if (!exist_LAI_data) {
+if (!exist_LAI_data && !biogeochem_flag) {
    
    print("No user-defined LAI data are available so default CLM 2000 LAI and SAI data are used.", quote=FALSE)
    
@@ -750,6 +819,33 @@ for (i in 1:length(lon)) {
 }
 disp_on_z0m[which(is.na(disp_on_z0m))] = 0
 
+################################################################################
+### Biogeochemistry starting condition
+################################################################################
+
+if (biogeochem_flag) {
+  
+  subfn = 'processed_clmi.ICRUCLM45BGCCROPmp24.0241-01-01.1.9x2.5_g1v6_simyr2000_c130515.nc'
+  filename = paste0(initial_data_dir, subfn)
+  nc = nc_open(filename)
+  LAI_initial_map = ncvar_get(nc, 'tlai'); LAI_initial_map = ifelse(test = is.na(LAI_initial_map), yes = 0, no = LAI_initial_map)
+  SAI_initial_map = ncvar_get(nc, 'tsai'); SAI_initial_map = ifelse(test = is.na(SAI_initial_map), yes = 0, no = SAI_initial_map)
+
+  leafC_initial_map = ncvar_get(nc, 'leafC'); leafC_initial_map = ifelse(test = is.na(leafC_initial_map), yes = 0, no = leafC_initial_map)
+  frootC_initial_map = ncvar_get(nc, 'frootC'); frootC_initial_map = ifelse(test = is.na(frootC_initial_map), yes = 0, no = frootC_initial_map)
+  livestemC_initial_map = ncvar_get(nc, 'livestemC'); livestemC_initial_map = ifelse(test = is.na(livestemC_initial_map), yes = 0, no = livestemC_initial_map)
+  deadstemC_initial_map = ncvar_get(nc, 'deadstemC'); deadstemC_initial_map = ifelse(test = is.na(deadstemC_initial_map), yes = 0, no = deadstemC_initial_map)
+  livecrootC_initial_map = ncvar_get(nc, 'livecrootC'); livecrootC_initial_map = ifelse(test = is.na(livecrootC_initial_map), yes = 0, no = livecrootC_initial_map)
+  deadcrootC_initial_map = ncvar_get(nc, 'deadcrootC'); deadcrootC_initial_map = ifelse(test = is.na(deadcrootC_initial_map), yes = 0, no = deadcrootC_initial_map)
+  grainC_initial_map = ncvar_get(nc, 'grainC'); grainC_initial_map = ifelse(test = is.na(grainC_initial_map), yes = 0, no = grainC_initial_map)
+
+  # storage C pools x7 for deciduous
+  # leafC_storage_initial_map = ncvar_get(nc, 'leafC_storage')
+  # ...
+
+  nc_close(nc)
+  print(paste0("Finish loading initial data from ",subfn))
+}
 ################################################################################
 ### End of module
 ################################################################################

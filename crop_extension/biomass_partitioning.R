@@ -30,21 +30,22 @@ f_crop_allocation_fluxes = function(A_can_umolm2s1, mr_total, gr_fraction = 0.3,
     growth_respiration = (A_can_gCm2s1 - mr_total) * gr_fraction
     NPP_gCm2s1 = A_can_gCm2s1 - growth_respiration - mr_total
     
-    
+    print(paste0('[allocation_flux] NPP = ', signif(NPP_gCm2s1,4), ' MR_tol = ', signif(mr_total,4)))
 
       if (crop_biomass_partitioning_scheme == 'custom') {
         # ... = f_custom_crop_allocation_coefficients()
       } else if (crop_biomass_partitioning_scheme == 'JULES'){
 
-          JULES_crop_alloc = f_get_JULES_crop_allocation_coefficients(ipft = ipft, GDD_mat = GDDmat, GDD_T2m = GDDT2m, GDD_emer = GDDemer, GDD_repr = GDDrepr, croplive_flag = crop_living_flag)
+          JULES_crop_alloc = f_get_JULES_crop_allocation_coefficients(ipft = ipft, GDD_mat = GDDmat, GDD_T2m = GDD_T2m, GDD_emer = GDDemer, GDD_repr = GDDrepr, croplive_flag = crop_living_flag)
           a_stem = JULES_crop_alloc$p_stem
           a_leaf = JULES_crop_alloc$p_leaf
           a_root = JULES_crop_alloc$p_root
           a_grain = JULES_crop_alloc$p_harv
           
         } else if (crop_biomass_partitioning_scheme == 'CLM4.5'){
+
           CLM4.5_crop_alloc = f_get_CLM_crop_allocation_coefficients(a_stem_leafem = astem_leafem, a_leaf_leafem = aleaf_leafem, a_leaf = aleaf, a_stem = astem,
-                                                                     GDDT2m = GDDT2m, GDDTsoil = GDD_Tsoil, GDD_mat = GDDmat, GDD_repr = GDDrepr, GDD_emer = GDDemer,
+                                                                     GDDT2m = GDD_T2m, GDDTsoil = GDD_Tsoil, GDD_mat = GDDmat, GDD_repr = GDDrepr, GDD_emer = GDDemer,
                                                                      crop_live_flag = crop_living_flag, peak_LAI_flag = peak_lai_flag, grain_fill_flag = grain_filling_flag,
                                                                      bfact = bfact, arooti = arooti, arootf = arootf, astemf = astemf, declfact = declfact, allconss = allconss, aleaff = aleaff, allconsl = allconsl, lfemerg = lfemerg, fleafi = fleafi)
           astem = CLM4.5_crop_alloc$a_stem
@@ -59,6 +60,7 @@ f_crop_allocation_fluxes = function(A_can_umolm2s1, mr_total, gr_fraction = 0.3,
     
     # these allocation fluxes increase the C stock of display pools (i.e., C pool that affects physiology directly)
     # e.g., leaf C -> LAI, grain C -> yield
+    # print(paste0('aleaf = ', signif(aleaf,3),' aroot = ', signif(aroot,3),' astem = ', signif(astem,3), ' agrain = ', signif(agrain,3)))
     leaf_carbon_partitioning_flux = NPP_gCm2s1 * aleaf
     fineroot_carbon_partitioning_flux = NPP_gCm2s1 * aroot
     livestem_carbon_partitioning_flux = NPP_gCm2s1 * astem
@@ -77,15 +79,15 @@ f_crop_allocation_fluxes = function(A_can_umolm2s1, mr_total, gr_fraction = 0.3,
                   fineroot_carbon_partitioning_flux_gCm2s1 = fineroot_carbon_partitioning_flux, 
                   livestem_carbon_partitioning_flux_gCm2s1 = livestem_carbon_partitioning_flux, 
                   deadstem_carbon_partitioning_flux_gCm2s1 = 0, 
-                  livecoraseroot_carbon_partitioning_flux_gCm2s1 = 0,
-                  deadcoraseroot_carbon_partitioning_flux_gCm2s1 = 0,
+                  livecoarseroot_carbon_partitioning_flux_gCm2s1 = 0,
+                  deadcoarseroot_carbon_partitioning_flux_gCm2s1 = 0,
                   grain_carbon_partitioning_flux_gCm2s1 = grain_carbon_partitioning_flux,
                   astem = astem,
                   aleaf = aleaf,
                   aroot = aroot,
                   arepr = agrain,
-                  astem_em = ifelse(test = exist("astem_leafem"), yes = astem_leafem, no = NA),
-                  aleaf_em = ifelse(test = exist("aleaf_leafem"), yes = aleaf_leafem, no = NA)
+                  astem_em = ifelse(test = exists("astem_leafem"), yes = astem_leafem, no = NA),
+                  aleaf_em = ifelse(test = exists("aleaf_leafem"), yes = aleaf_leafem, no = NA)
                   )
     
 }
@@ -98,26 +100,32 @@ f_get_CLM_crop_allocation_coefficients = function(a_stem_leafem, a_leaf_leafem, 
                                               bfact, arooti, arootf, astemf, declfact, allconss, aleaff, allconsl, lfemerg, fleafi,    # CLM PFT constants
                                               current_date, ipft){                                                                     # model settings
     
+    # print(paste0("[f_get_CLM_alloc] GDDT2m = ", signif(GDDT2m, 5), " GDDTsoil = ", signif(GDDTsoil, 5), "  GDD_mat = ", GDD_mat, " GDD_repr = ",GDD_repr, " GDD_emer = ", GDD_emer ))
+    
     if (crop_live_flag) {
         
         if (GDDTsoil >= GDD_emer && GDDT2m < GDD_repr) { #vegetative stage
-          a_root = arooti - (arooti - arootf)*(GDDT2m/GDD_mat)
-          a_leaf = (1-a_root)*(fleafi * (exp(-bfact) - exp(-bfact * GDD_T2m/(GDD_repr))) / (exp(-bfact)-1))
-          a_stem = 1-a_root-a_leaf
-          a_grain = 0
+            if (limit_crop_LAI_flag && peak_LAI_flag) {
+                a_leaf = 0; astem = 0; aroot = 1; agrain = 0
+            } else {
+                a_root = arooti - (arooti - arootf)*(GDDT2m/GDD_mat)
+                a_leaf = (1-a_root)*(fleafi * (exp(-bfact) - exp(-bfact * GDDT2m/GDD_repr)) / (exp(-bfact)-1))
+                a_stem = 1-a_root-a_leaf
+                a_grain = 0
+            }
           a_stem_leafem = a_stem; a_leaf_leafem = a_leaf
         } else if (GDDT2m >= GDD_repr && GDDT2m < GDD_mat) { #reproductive stage
           a_root = arooti - (arooti - arootf)*(GDDT2m/GDD_mat)
             if (a_leaf_leafem <= aleaff){
               a_leaf = a_leaf_leafem
             } else {
-              a_leaf = max(aleaff, min(1, (1-(GDDT2m-GDD_repr)/(GDD_mat*declfact-GDD_repr)^allconsl)))
+              a_leaf = max(aleaff, min(1, a_leaf * (1-(GDDT2m-GDD_repr)/(GDD_mat*declfact-GDD_repr))^allconsl))
             }
           
             if (a_stem_leafem <= astemf){
               a_stem = a_stem_leafem
             } else {
-              a_stem = max(astemf,min(1, (1-(GDDT2m-GDD_repr)/(GDD_mat*declfact-GDD_repr)^allconss) ))
+              a_stem = max(astemf,min(1, a_stem * (1-(GDDT2m-GDD_repr)/(GDD_mat*declfact-GDD_repr))^allconss))
             }
           a_grain = 1-a_root-a_leaf-a_stem
         } else {  # before emergence 
@@ -126,6 +134,10 @@ f_get_CLM_crop_allocation_coefficients = function(a_stem_leafem, a_leaf_leafem, 
     } else {      # after harvesting, before planting
         a_leaf = 0; a_stem = 0; a_root = 0; a_grain = 0
     }
+    
+    print(paste0("[f_get_CLM_alloc] a_stem_leafem = ", a_stem_leafem, ' a_leaf_leafem = ', a_leaf_leafem, ' aleaf = ', a_leaf, ' astem = ', a_stem, ' aroot = ', a_root, ' agrain = ', a_grain))
+    
+    
   output = list(a_leaf = a_leaf, a_stem = a_stem, a_root = a_root, a_grain = a_grain, a_stem_leafemergence = a_stem_leafem, a_leaf_leafemergence = a_leaf_leafem)
   return(output)
 }

@@ -18,7 +18,37 @@ n_core = detectCores()
 
 # Debugging mode?
 # If turned on, no output data will be saved externally. Debugging mode should be run only in an R console environment (i.e., not via a UNIX command line), and is convenient for single-site simulation.
-debug_flag = TRUE
+debug_flag = FALSE
+
+################################################################################
+### Directories:
+################################################################################
+
+# Required directories:
+
+# Set TEMIR directory:
+TEMIR_dir = '/Users/JackyPang/Desktop/TEMIR_run/run_dir_v1.1/'
+# Set source code directory:
+code_dir = paste0(TEMIR_dir, 'code_v1.1/')
+# Set meteorological data directory:
+met_data_dir = paste0('/Users/JackyPang/Desktop/TEMIR_run/met_data/GEOS_2x2.5.d/')
+# Set PFT and surface data directory:
+surf_data_dir = paste0('/Users/JackyPang/Desktop/TEMIR_run/surf_data/')
+# Set processed PFT and surface output directory:
+processed_surf_data_dir = paste0('/Users/JackyPang/Desktop/TEMIR_run/processed_surf_data/')
+
+# Optional directories:
+
+# Set FLUXNET directory (set as NA if this is not available):
+FLUXNET_dir = paste0('/Users/JackyPang/Desktop/TEMIR_run/FLUXNET/')
+
+# Whatever are specified below, they will be overridden by "O3_data_dir" and "LAI_data_dir" set in the input script. They are preliminarily defined here to avoid problems during checking directory paths (below) when the execution script is re-run in the same console. (Tai, Feb 2019)
+# Set user-defined LAI data directory (containing LAI nc files):
+LAI_data_dir = NA
+# Set ozone data directory:
+O3_data_dir = NA
+
+optional_dirs = c('FLUXNET_dir', 'LAI_data_dir', 'O3_data_dir')
 
 ################################################################################
 ### Model configuration:
@@ -40,8 +70,8 @@ dlat = 2.0
 lat = seq(-90, 90, by=dlat)
 
 # Model run dates:
-start_date = 20090601
-end_date = 20090602
+start_date = 20030101
+end_date = 20031231
 
 # Continue from previous run?
 # If set true, temporary data within 10 days before the start date are needed.
