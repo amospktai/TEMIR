@@ -97,7 +97,7 @@ f_boundary_cond = function(u_leaf, d_leaf=0.04, met_cond=FALSE, P_atm=101325, th
 ################################################################################
 
 # Leaf stomatal conductance (umol m^-2 s^-1 or m s^-1):
-f_stomatal_cond = function(A_n, c_s=NULL, e_s=NULL, c_a=NULL, e_a=NULL, g_b=NULL, T_v=298.15, P_atm=101325, beta_t=1, C3_plant=TRUE, gs_scheme='FBB', met_cond=FALSE, theta_atm=NULL) {
+f_stomatal_cond = function(A_n, c_s=NULL, e_s=NULL, c_a=NULL, e_a=NULL, g_b=NULL, T_v=298.15, P_atm=101325, beta_t=1, C3_plant=TRUE, gs_scheme='FBB', met_cond=FALSE, theta_atm=NULL, g1_med=NULL) {
     
     # Uses external functions "f_esat" and "quadroot".
     # Uses global constants: "R_uni=8.31446" universal gas constant (J K^-1 mol^-1)
@@ -113,7 +113,7 @@ f_stomatal_cond = function(A_n, c_s=NULL, e_s=NULL, c_a=NULL, e_a=NULL, g_b=NULL
     
     # shsun 18/10/2017
     # Medlyn model to calculate stomatal conductance "g_s":
-    # "e_vpd" (Pa) = water vapor pressure deficit (VPD) at leaf surface;
+    # "e_vpd" (kPa) = water vapor pressure deficit (VPD) at leaf surface;
     # 1. If "e_s" (Pa) and "c_s" (Pa) are given, it calculates "g_s" directly;
     # 2. If "e_a" (Pa) adn "c_a" (Pa) and "g_b" (umol m^-2 s^-1 or m s^-1) are given, it calculates "g_s" via solving a quadratic equation using:
     #   e_s = (e_a/g_s+e_i/g_b)/(1/g_b+1/g_s)
@@ -132,27 +132,30 @@ f_stomatal_cond = function(A_n, c_s=NULL, e_s=NULL, c_a=NULL, e_a=NULL, g_b=NULL
     }
     
     if (gs_scheme == 'Medlyn') {
-        if (C3_plant) {
-            m = 106.6*beta_t      # Pa^0.5
-            b = 10000             # umol m^-2 s^-1
-        } else {
-            m = 34.79*beta_t      # Pa^0.5
-            b = 40000             # umol m^-2 s^-1
-        }
+        m = g1_med*beta_t
+        b = 100
+        if (is.na(g1_med)) {  # if no parameter available, use previous C3/C4 param
+            if (C3_plant) {
+                m = 3.37*beta_t    # kPa^0.5
+                b = 100            # umol m^-2 s^-1
+            }else {
+                m = 1.1*beta_t      # kPa^0.5
+                b = 100             # umol m^-2 s^-1
+            }
         if (A_n <= 0) {
             g_s = b
         } else {
             if (!is.null(c_s) & !is.null(e_s)) {
                
                 # put constraints on RH/vpd in MED mode
-                e_vpd = max(e_sat - e_s, 50)
+                e_vpd = max(e_sat - e_s, 50)*0.001
                 g_s = 1.6*(1 + m/(e_vpd^0.5))*A_n/(c_s/P_atm)
             } else {
                 if (is.null(c_a) | is.null(e_a) | is.null(g_b)) stop('All of c_a, e_a and g_b need to be specified.')
                 if (met_cond) g_b = g_b/mol_to_met
                 tmp_c_s = max(c(1e-6, (c_a - (1.4/g_b)*P_atm*A_n)), na.rm=TRUE)
                 c_s = tmp_c_s/P_atm
-                e_vpd = max(e_sat - e_a, 150)
+                e_vpd = max(e_sat - e_a, 50)*0.001
                 
                 term = 1.6*A_n/c_s
                 tmp_a = 1
@@ -584,7 +587,7 @@ f_ci = function() {
     A_n = leaf_photosyn$A_n
     R_d = leaf_photosyn$R_d
     # Leaf stomatal conductance (umol m^-2 s^-1):
-    g_s = f_stomatal_cond(A_n=A_n, c_a=c_a, e_a=e_a, g_b=g_b, T_v=T_v, P_atm=P_atm, beta_t=beta_t, C3_plant=C3_plant, met_cond=FALSE)
+    g_s = f_stomatal_cond(A_n=A_n, c_a=c_a, e_a=e_a, g_b=g_b, T_v=T_v, P_atm=P_atm, beta_t=beta_t, C3_plant=C3_plant, met_cond=FALSE, g1_med=g1_med)
     # Revised "c_i":
     ci_new = c_a - (1.4/g_b + 1.6/g_s)*P_atm*A_n
     if (A_n <= 0) fval = 0 else fval = c_i - ci_new
@@ -608,7 +611,7 @@ f_ci2 = function() {
     if (A_n > 0) A_n = A_n*max(c(0, min(c(O3_coef_An, 1), na.rm=TRUE)), na.rm=TRUE)
     # R_d = R_d*max(c(0, min(c(O3_coef_An, 1), na.rm=TRUE)), na.rm=TRUE)
     # Leaf stomatal conductance (umol m^-2 s^-1):
-    g_s = f_stomatal_cond(A_n=A_n, c_a=c_a, e_a=e_a, g_b=g_b, T_v=T_v, P_atm=P_atm, beta_t=beta_t, C3_plant=C3_plant, met_cond=FALSE)
+    g_s = f_stomatal_cond(A_n=A_n, c_a=c_a, e_a=e_a, g_b=g_b, T_v=T_v, P_atm=P_atm, beta_t=beta_t, C3_plant=C3_plant, met_cond=FALSE, g1_med=g1_med)
     # Ozone impact factor on photosynthesis:
     ozone_impact = f_ozone_impact(O3_conc=O3_conc, g_s=g_s, g_b=g_b, g_ah=g_ah, P_atm=P_atm, theta_atm=theta_atm, met_cond=FALSE, scheme='Sitch', sensitivity=sensitivity, plant_group=plant_group)
     O3_coef_An_new = ozone_impact$O3_coef_An
@@ -624,7 +627,7 @@ f_ci2 = function() {
 ################################################################################
 
 # Solving for leaf photosynthesis (umol CO2 m^-2 s^-1), stomatal conductance and boundary-layer conductance (umol m^-2 s^-1 or m s^-1) with the Farquhar-Ball-Berry model:
-f_Farquhar_Ball_Berry = function(c_a, e_a, phi, T_v=298.15, P_atm=101325, theta_atm=298.15, C3_plant=TRUE, V_cmax25_0, Phi_PSII=0.85, Theta_PSII=0.70, beta_t=1, acclimation=FALSE, T_10d=NULL, lat=0, decl=0, colimit=TRUE, canopy_avg=FALSE, sunlit=NULL, LAI=NULL, LAI_sun=NULL, K_n=0.30, K_b=0.50, O3_damage=FALSE, O3_conc=NULL, scheme='Lombardozzi', gs_scheme = 'FBB', dt=3600, LAI_prev=NULL, evergreen=FALSE, leaf_long=1e3, CUO_prev=0, sensitivity='high', plant_group='broadleaf', g_ah=NULL, biogeochem=FALSE, leaf_N_conc=NULL, u_leaf, d_leaf=0.04, met_cond=FALSE, tol=1e-3) {
+f_Farquhar_Ball_Berry = function(c_a, e_a, phi, T_v=298.15, P_atm=101325, theta_atm=298.15, C3_plant=TRUE, V_cmax25_0, Phi_PSII=0.85, Theta_PSII=0.70, beta_t=1, acclimation=FALSE, T_10d=NULL, lat=0, decl=0, colimit=TRUE, canopy_avg=FALSE, sunlit=NULL, LAI=NULL, LAI_sun=NULL, K_n=0.30, K_b=0.50, O3_damage=FALSE, O3_conc=NULL, scheme='Lombardozzi', gs_scheme = 'FBB', dt=3600, LAI_prev=NULL, evergreen=FALSE, leaf_long=1e3, CUO_prev=0, sensitivity='high', plant_group='broadleaf', g_ah=NULL, biogeochem=FALSE, leaf_N_conc=NULL, u_leaf, d_leaf=0.04, met_cond=FALSE, tol=1e-3, g1_med=NULL) {
 
     # Uses external functions "f_boundary_cond", "f_leaf_photosyn", "f_stomatal_cond", "f_ozone_impact", and "f_ci".
     # Uses global constants: "R_uni = 8.31446" universal gas constant (J K^-1 mol^-1)
@@ -824,7 +827,7 @@ f_Farquhar_Ball_Berry = function(c_a, e_a, phi, T_v=298.15, P_atm=101325, theta_
 ################################################################################
 
 # Find canopy-integrated photosynthesis (umol CO2 m^-2 s^-1) and conductance (umol m^-2 s^-1 or m s^-1):
-f_canopy_photosyn = function(c_a, e_a, phi_sun, phi_sha, T_v=298.15, P_atm=101325, theta_atm=298.15, C3_plant=TRUE, V_cmax25_0, Phi_PSII=0.85, Theta_PSII=0.70, beta_t=1, acclimation=TRUE, T_10d=298.15, lat=0, decl=0, colimit=TRUE, LAI, LAI_sun, K_n=0.30, K_b=0.50, O3_damage=FALSE, O3_conc=NULL, scheme='Lombardozzi', gs_scheme = 'FBB', dt=3600, LAI_prev=NULL, evergreen=FALSE, leaf_long=1e3, CUO_prev_sun=0, CUO_prev_sha=0, sensitivity='high', plant_group='broadleaf', g_ah=NULL, biogeochem=FALSE, leaf_N_conc=NULL, u_leaf, d_leaf=0.04, met_cond=FALSE, tol=1e-3) {
+f_canopy_photosyn = function(c_a, e_a, phi_sun, phi_sha, T_v=298.15, P_atm=101325, theta_atm=298.15, C3_plant=TRUE, V_cmax25_0, Phi_PSII=0.85, Theta_PSII=0.70, beta_t=1, acclimation=TRUE, T_10d=298.15, lat=0, decl=0, colimit=TRUE, LAI, LAI_sun, K_n=0.30, K_b=0.50, O3_damage=FALSE, O3_conc=NULL, scheme='Lombardozzi', gs_scheme = 'FBB', dt=3600, LAI_prev=NULL, evergreen=FALSE, leaf_long=1e3, CUO_prev_sun=0, CUO_prev_sha=0, sensitivity='high', plant_group='broadleaf', g_ah=NULL, biogeochem=FALSE, leaf_N_conc=NULL, u_leaf, d_leaf=0.04, met_cond=FALSE, tol=1e-3, g1_med=NULL) {
 
     # Uses external function "f_Farquhar_Ball_Berry".
     # Uses global constants: "R_uni = 8.31446" universal gas constant (J K^-1 mol^-1)
@@ -857,14 +860,13 @@ f_canopy_photosyn = function(c_a, e_a, phi_sun, phi_sha, T_v=298.15, P_atm=10132
                                     plant_group=plant_group, 
                                     g_ah=g_ah, biogeochem=biogeochem, 
                                     leaf_N_conc=leaf_N_conc, u_leaf=u_leaf, 
-                                    d_leaf=d_leaf, met_cond=met_cond, tol=tol)
+                                    d_leaf=d_leaf, met_cond=met_cond, tol=tol, g1_med=g1_med)
     A_nsun = FBB_sun$A_n
     R_dsun = FBB_sun$R_d
     g_ssun = FBB_sun$g_s
     g_b = FBB_sun$g_b
     CUO_sun = FBB_sun$CUO
-    # print(paste0("Asun = ", signif(A_nsun, 4)))
-    
+
     # Shaded leaves:
     FBB_sha = f_Farquhar_Ball_Berry(c_a=c_a, e_a=e_a, phi=phi_sha, T_v=T_v, 
                                     P_atm=P_atm, theta_atm=theta_atm, 
@@ -883,7 +885,7 @@ f_canopy_photosyn = function(c_a, e_a, phi_sun, phi_sha, T_v=298.15, P_atm=10132
                                     plant_group=plant_group, 
                                     g_ah=g_ah, biogeochem=biogeochem, 
                                     leaf_N_conc=leaf_N_conc, u_leaf=u_leaf, 
-                                    d_leaf=d_leaf, met_cond=met_cond, tol=tol)
+                                    d_leaf=d_leaf, met_cond=met_cond, tol=tol, g1_med=g1_med)
     A_nsha = FBB_sha$A_n
     R_dsha = FBB_sha$R_d
     g_ssha = FBB_sha$g_s
@@ -909,8 +911,7 @@ f_canopy_photosyn = function(c_a, e_a, phi_sun, phi_sha, T_v=298.15, P_atm=10132
     
     # Stomatal conductance weighted by sunlit and shaded fraction (umol m^-2 s^-1 or m s^-1):
     g_s = (g_ssun*LAI_sun + g_ssha*LAI_sha)/(LAI_sun + LAI_sha)
-    # print(paste0("Acan = ", signif(A_can, 4), " L_sun = ", LAI_sun, " L_sha = ", LAI_sha))
-    
+
     output = list(A_can=A_can, R_can=R_can, g_can=g_can, CUO_can=CUO_can, A_nsun=A_nsun, A_nsha=A_nsha, R_dsun=R_dsun, R_dsha=R_dsha, g_ssun=g_ssun, g_ssha=g_ssha, g_s=g_s, g_b=g_b, CUO_sun=CUO_sun, CUO_sha=CUO_sha)
     return(output)
     

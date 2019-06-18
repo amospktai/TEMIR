@@ -18,7 +18,7 @@ n_core = detectCores()
 
 # Debugging mode?
 # If turned on, no output data will be saved externally. Debugging mode should be run only in an R console environment (i.e., not via a UNIX command line), and is convenient for single-site simulation.
-debug_flag = FALSE
+debug_flag = TRUE
 
 ################################################################################
 ### Directories:
@@ -70,8 +70,8 @@ dlat = 2.0
 lat = seq(-90, 90, by=dlat)
 
 # Model run dates:
-start_date = 20030101
-end_date = 20031231
+start_date = 20010101
+end_date = 20011231
 
 # Continue from previous run?
 # If set true, temporary data within 10 days before the start date are needed.

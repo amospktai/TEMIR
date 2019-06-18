@@ -7,14 +7,14 @@
 TEMIR_version = '1.1'
 
 # Set TEMIR directory:
-TEMIR_dir = '/Users/JackyPang/Desktop/TEMIR_run/run_dir_v1.1/'
+TEMIR_dir = '~/Dropbox/Research/Projects/TEMIR/'
 
 ################################################################################
 ### TEMIR simulation setup:
 ################################################################################
 
 # Create a name for this simulation:
-simulation_name = 'simulation_005_testing_Dir_with_BGC'
+simulation_name = 'simulation_01'
 
 # Simulation types:
 
@@ -69,7 +69,6 @@ file.copy(from = paste0(TEMIR_dir, 'code_v', TEMIR_version, '/simulation_name.tx
 
 # Copy script that contains functions to analyze outputs:
 file.copy(from = paste0(TEMIR_dir, 'code_v', TEMIR_version, '/find_hist_stat.R'), to = sim_dir)
-
 
 ################################################################################
 ### End of initialization
