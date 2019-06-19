@@ -4,17 +4,17 @@
 ################################################################################
 
 # TEMIR version:
-TEMIR_version = '1.2'
+TEMIR_version = '1.1'
 
 # Set TEMIR directory:
-TEMIR_dir = '~/Dropbox/Research/DOSE/TEMIR_201905/'
+TEMIR_dir = ' ' # set this directory to be where all the R scripts are located
 
 ################################################################################
 ### TEMIR simulation setup:
 ################################################################################
 
 # Create a name for this simulation:
-simulation_name = 'test01'
+simulation_name = ' ' # give your simulation a name
 
 # Simulation types:
 # Simulating ecophysiology?
