@@ -40,8 +40,8 @@ dlat = 2.0
 lat = seq(-90, 90, by=dlat)
 
 # Model run dates:
-start_date = 20100101
-end_date = 20111231
+start_date = 20100701
+end_date = 20100707
 
 # Continue from previous run?
 # If set true, temporary data within 10 days before the start date are needed.
@@ -87,7 +87,7 @@ Phi_PSII = 0.85
 Theta_PSII = 0.70
 
 # Stomatal conductance scheme: Farquhar-Ball-Berry model ('FBB') or Medlyn model ('Medlyn')
-# or DOSE ('DOSE') (have to turn on O3_POD)
+# or DOSE ('DOSE') (have to turn on O3_POD), (Apr 2019, Sadiq), used for POD calculation
 gs_scheme = 'DOSE'
 
 # Use simplified radiative trasnfer model?
@@ -130,7 +130,7 @@ CO2_scale_flag = TRUE
 
 ################################################################################
 
-# Calculate and output Phytotoxic Ozone Dose (POD)
+# Calculate and output Phytotoxic Ozone Dose (POD), Apr 2019, Sadiq
 O3_POD = TRUE
 
 if (O3_POD) { # Same as ozone damage treatment
@@ -313,7 +313,7 @@ if (O3_damage_flag) {
    )
 }
 
-# Conditional outputs:
+# Conditional outputs, Apr 2019, Sadiq
 # Additional POD outputs:
 if (O3_POD) {
   available_outputs_df = rbind.data.frame(
