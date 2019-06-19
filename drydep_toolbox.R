@@ -2,6 +2,7 @@
 # Coupled to TEMIR. R_a and g_s directly taken from TEMIR
 
 # 9/7/2018 incorporate Anthony's 6_7_2018 version
+# Apr 2019, r.s.dose, new function to compute gs following DOSE method
 
 ################################################################################
 
