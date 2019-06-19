@@ -107,16 +107,13 @@ lnctop = 1/(leafcn*slatop)
 vcmax25top = lnctop*flnr*fnr*ar25
 vcmax25top[1] = 0
 
-# Parameters for Medlyn model
-g1_med_table = c(NA, 2.35, 2.35, 2.35, 4.12, 4.12, 4.45, 4.45, 4.45, 4.7, 4.7, 4.7, 2.22, 5.25, 1.62, NA, NA, 1.79, 1.79, NA, NA, NA, NA, 5.79, 5.79)
-
 ################################################################################
 ### Surface data from CLM default ncdf file:
 ################################################################################
 
 print('Loading surface data...', quote=FALSE)
 
-filename = paste0(surf_data_dir, 'surfdata_map/surfdata_1.9x2.5_mp24_simyr2000_c130419.nc')
+filename = paste0(surf_data_dir, 'surfdata_map/surfdata_1.9x2.5_mp24_simyr2000_c130419_Sadiq.nc')
 
 nc = nc_open(filename)
 # Dimensions:
@@ -597,7 +594,7 @@ if (!exist_LAI_data) {
 
 # Moved to this file from "execution_vX.Y.R" (Tai, Feb 2019):
 
-if (O3_damage_flag & !O3_fixed_flag) {
+if (O3_POD | O3_damage_flag & !O3_fixed_flag) {
    
    # Vector of simulation years:
    # This is also set above if LAI_data_flag=TRUE.
@@ -644,6 +641,21 @@ if (O3_damage_flag & !O3_fixed_flag) {
       O3_hourly = sp.regrid(spdata=O3_hourly, lon.in=lon_O3, lat.in=lat_O3, lon.out=lon, lat.out=lat)
    }
    
+}
+
+################################################################################
+### Load crop calendar data
+################################################################################
+
+if (O3_POD) {
+  filename = paste0(crop_data_dir, 'crop_calendar.RData')
+  print(paste0('Loading crop harvest date data from ', filename, '...'), quote=FALSE)
+  load(filename)
+  
+  subfn = 'f_phen.RData'
+  filename = paste0(crop_data_dir, subfn)
+  print(paste0('Loading pre-calculated phenological factor data from ', filename, '...'), quote=FALSE)
+  load(filename)
 }
 
 ################################################################################

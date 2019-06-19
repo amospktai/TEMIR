@@ -4,17 +4,17 @@
 ################################################################################
 
 # TEMIR version:
-TEMIR_version = '1.1'
+TEMIR_version = '1.2'
 
 # Set TEMIR directory:
-TEMIR_dir = '~/Dropbox/Research/Projects/TEMIR/'
+TEMIR_dir = '~/Dropbox/Research/DOSE/TEMIR_201905/'
 
 ################################################################################
 ### TEMIR simulation setup:
 ################################################################################
 
 # Create a name for this simulation:
-simulation_name = 'simulation_01'
+simulation_name = 'test01'
 
 # Simulation types:
 # Simulating ecophysiology?
@@ -35,7 +35,7 @@ if (!dir.exists(paths = paste0(TEMIR_dir, 'code_v', TEMIR_version))) stop('TEMIR
 ################################################################################
 
 # Set simulation directory name:
-sim_dir = paste0(TEMIR_dir, simulation_name, '/')
+sim_dir = paste0(TEMIR_dir,'cases/', simulation_name, '/')
 
 # Check if simulation directory already exists:
 # if (length(Sys.glob(paths = sim_dir)) == 1) stop(paste0('Simulation directory "', sim_dir,'" already exists!'))
@@ -54,7 +54,7 @@ setwd(sim_dir)
 
 # Copy execution script:
 # system(command=paste0("cp ", TEMIR_dir, 'code_v', TEMIR_version, '/execution_v', TEMIR_version, ".R ", sim_dir))
-file.copy(from = paste0(TEMIR_dir, 'code_v', TEMIR_version, '/execution_v', TEMIR_version, '.R'), to = sim_dir)
+file.copy(from = paste0(TEMIR_dir, 'code_v', TEMIR_version, '/execution_v1.1.R'), to = sim_dir)
 
 # Copy ecophysiology input script:
 # if (ecophysiol_flag) system(command=paste0("cp ", TEMIR_dir, 'code_v', TEMIR_version, "/input_TEMIR_ecophysiol.R ", sim_dir))
