@@ -208,21 +208,22 @@ r.s.zhang = function(rsmin, brs, par.sun, par.sha, Lsun, Lsha, T.c, tmin, tmax,
 ################################################################################################################
 # DO3SE model Stomatal resistance calculation, initially implemented for POD3 calculation
 # Sadiq 2019
-#
+################################################################################################################
 r.s.dose = function(g.max = 500, P_atm=P_atm, theta_atm=theta_atm, f.phen, T_min = 12, T_opt = 26, T_max = 40, T_v, f.min = 0.01, par_sun, par_sha, f_sun, light_alpha = 0.0105, VPD_min = 3.2, VPD_max = 1.2, vpd){
 
-  # g.max, maximum stomatal conductance for ozone, mmol O3 m-2 (PLA) s-1
+  # g.max, maximum stomatal conductance for ozone, mmol O3 m-2 (PLA) s-1, follow Mills et al., 2018
   # f.phen accounts for leaf age over the course of the growing season
-  # f.light accounts for light, PFD is photon flux density
+  # f.light accounts for light
   # f.min: relative minimum stomatal conductance
   # f.T accounts for leaf temeprature
   # f.D accounts for vapour pressure deficit
-  # f.SW accounts for soil water availability ### NOT AVAILABLE NOW ###
+  # f.SW accounts for soil water availability ### NOT AVAILABLE YET ###
   
+  # unit conversion
   mol_to_met = 1e-3*R_uni*theta_atm/P_atm
   g.max.met = g.max * mol_to_met
   
-  #f.phen is pre-calculated and read in
+  # f.phen is pre-calculated and read in
   f.phen = f.phen
   
   # f.T = function of
