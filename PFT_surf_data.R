@@ -15,6 +15,7 @@
 # Feb 2018: A new variable for areas of grid cells, "grid_area", was added, and now stored in "surf_data_regrid_2000.RData" too. (Tai)
 # Feb 2019: Changed code for reading newer versions (ie vBNU) of GEOS-Chem MODIS LAI (Yung)
 # Feb 2019: Completely revamped the input methods for reading in interannually varying LAI data and O3 data.
+# Apr 2019: read in new surface data and crop related data for POD calculation (Sadiq)
 
 ################################################################################
 ### PFT-specific parameters from NCDF file:
@@ -113,6 +114,8 @@ vcmax25top[1] = 0
 
 print('Loading surface data...', quote=FALSE)
 
+# new surface data for POD simulation, with modified LAI, SAI and PCT_PFT
+# check make_lai.R and crop_pft_frac.R for how I modified it
 filename = paste0(surf_data_dir, 'surfdata_map/surfdata_1.9x2.5_mp24_simyr2000_c130419_Sadiq.nc')
 
 nc = nc_open(filename)
@@ -645,14 +648,15 @@ if (O3_POD | O3_damage_flag & !O3_fixed_flag) {
 
 ################################################################################
 ### Load crop calendar data
+### Sadiq, Apr 2019
 ################################################################################
 
-if (O3_POD) {
+if (O3_POD) { # crop calendar data, will be updated and made consistent with Jacky's inputs
   filename = paste0(crop_data_dir, 'crop_calendar.RData')
   print(paste0('Loading crop harvest date data from ', filename, '...'), quote=FALSE)
   load(filename)
   
-  subfn = 'f_phen.RData'
+  subfn = 'f_phen.RData' # phenological factor, used in r.s.dose function to calculate gs
   filename = paste0(crop_data_dir, subfn)
   print(paste0('Loading pre-calculated phenological factor data from ', filename, '...'), quote=FALSE)
   load(filename)
