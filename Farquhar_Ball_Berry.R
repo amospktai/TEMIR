@@ -934,7 +934,7 @@ f_canopy_photosyn = function(c_a, e_a, phi_sun, phi_sha, T_v=298.15, P_atm=10132
     # POD3 (Phytotoxic Ozone Dose above 3 nmol m^-2 s^-1) calculation
     # Sadiq, Mar 2019
     if (O3_POD) {
-      if(gs_scheme == 'DOSE'){
+      if(gs_scheme == 'DOSE'){ # DOSE gs scheme
         r.s_dose = r.s.dose(P_atm=P_atm, theta_atm=theta_atm, 
                             f.phen = f_phen_pft, T_v = T_v, 
                             par_sun = phi_sun, par_sha = phi_sha, 
@@ -948,7 +948,7 @@ f_canopy_photosyn = function(c_a, e_a, phi_sun, phi_sha, T_v=298.15, P_atm=10132
         
         g_s = 1/r_s
       }
-      
+      # compute leaf-level instantanous ozone flux
       O3_flux = f_ozone_flux(O3_conc=O3_conc, g_s=g_s, g_b=g_b, 
                              g_ah=g_ah, P_atm=P_atm, theta_atm=theta_atm)
       O3_flux_ll = O3_flux$O3_flux_ll # leaf-level ozone flux
