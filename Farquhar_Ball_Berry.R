@@ -428,6 +428,7 @@ f_ozone_flux = function(O3_conc, g_s, g_b, g_ah, P_atm=101325, theta_atm=298.15)
   O3_conc_nmol = O3_conc*P_atm/(theta_atm*R_uni)
   # Instantaneous ozone flux (nmol m^-2 s^-1), leaf-level:
   # note: k_O3/g_s is modified to 1/g_s, because DOSE gs scheme computes gs for ozone rather than for water vapour
+  # if want to simulate POD with FBB gs scheme, k_O3 should be added here
   O3_flux_ll = O3_conc_nmol/(1/g_s + 1/g_b + 1/g_ah)
 
   output = list(O3_flux_ll=O3_flux_ll)
