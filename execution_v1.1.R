@@ -26,16 +26,16 @@ timestamp()
 # Required directories:
 
 # Set TEMIR directory:
-TEMIR_dir = '~/Dropbox/Research/DOSE/TEMIR_201905/'
+TEMIR_dir = ' '
 # Set source code directory:
-code_dir = paste0(TEMIR_dir, 'code_v1.2/')
+code_dir = paste0(TEMIR_dir, 'code_v1.1/')
 # Set meteorological data directory:
-met_data_dir = paste0('~/Desktop/OneDrive - The Chinese University of Hong Kong/Projects/TEMIR/TEMIR_inputs/met_data/GEOS_2x2.5.d/')
+met_data_dir = paste0(TEMIR_dir, 'TEMIR_inputs/met_data/GEOS_2x2.5.d/')
 # Set PFT and surface data directory:
 surf_data_dir = paste0(TEMIR_dir, 'TEMIR_inputs/clm2_data/')
 # Set processed PFT and surface output directory:
 processed_surf_data_dir = paste0(TEMIR_dir, 'TEMIR_inputs/processed_surf_data/')
-# Crop input data for POD3 calculation
+# Crop input data for POD3 calculation, Apr 2019, Sadiq (crop calendar and f_phen.RData)
 crop_data_dir = paste0(TEMIR_dir, 'TEMIR_inputs/crops/')
 
 ################################################################################
