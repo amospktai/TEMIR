@@ -425,6 +425,86 @@ if (!file.exists(filename)) {
 cat('\n')
 
 ################################################################################
+### Regrid planting and harvest date data from Sack et al. (2010): (Pang and Sadiq, Jun 2019)
+################################################################################
+
+# Regrid the planting and harvesting date data if the simulation is BGC (with crop)
+# The resolution of the original data is 0.5 x 0.5
+
+if ((biogeochem_flag && get_planting_date_option == 'prescribed-map') || O3_POD) {
+
+    if (dlon < 0.5 || dlat < 0.5){
+        # Is this necessary???? (Pang, Jun 2019)
+        warning('The default planting and harvesting data has resolution of 0.5x0.5. Simulation resoltuion is too high that there may be some problems in regridding.')
+    }
+
+    if (dlon == 0.5 && dlat == 0.5){
+        # Simulation resolution is the same as the data, can be read in directly from .nc
+        data_directory = '.../TEMIR_input/plant_har_date/'
+        filename = 'Sack_crop_calendar.nc'
+        nc = nc_open(paste0(data_directory, filename))
+        prescribed_planting_date_Sack = ncvar_get(nc, 'planting')
+        prescribed_harvesting_date_Sack = ncvar_get(nc, 'harvest')
+        nc_close(nc)
+    } else {
+        # Like the prescribed LAI and soil data, read in the RData contains the regridded data if it exists. Otherwise, regrid the data to a suitable resolution
+        data_directory = '.../TEMIR_input/plant_har_date/'
+        filename = paste0(data_directory,'crop_planting_harvesting_Sack_',dlat,'x',dlon,'.RData')
+
+        if (!file.exists(filename)){
+            # Read in the nc file and regrid the data to the simulation resolution
+            nc_filename = 'Sack_crop_calendar.nc'
+            nc = nc_open(paste0(data_directory, nc_filename))
+            tmp_planting_date_Sack_nc = ncvar_get(nc, 'planting')
+            tmp_harvesting_date_Sack_nc = ncvar_get(nc, 'harvest')
+
+            lat_Sack = ncvar_get(nc, 'lat')
+            lon_Sack = ncvar_get(nc, 'lon')
+            nc_close(nc)
+
+            lat_diff_sack = lat_Sack[1] - lat_Sack[2]
+            lat_diff = lat[1] - lat[2]
+
+            lon_diff_sack = lon_Sack[1] - lon_Sack[2]
+            lon_diff = lon[1] - lon[2]
+
+            if (lat_diff_sack * lat_diff < 0) {
+                print('Fliping the order of lat_Sack for sp.regrid()')
+                lat_Sack = rev(lat_Sack)
+                tmp_planting_date_Sack_nc[,(1:length(lat_Sack)),] = tmp_planting_date_Sack_nc[,rev((1:length(lat_Sack))),]
+                tmp_harvesting_date_Sack_nc[,(1:length(lat_Sack)),] = tmp_harvesting_date_Sack_nc[,rev((1:length(lat_Sack))),]
+
+            }
+
+            if (lon_diff_sack * lon_diff < 0) {
+                print('Fliping the order of lon_Sack for sp.regrid()')
+                lon_Sack = rev(lon_Sack)
+                tmp_planting_date_Sack_nc[(1:length(lon_Sack)),,] = tmp_planting_date_Sack_nc[rev((1:length(lon_Sack))),,]
+                tmp_harvesting_date_Sack_nc[(1:length(lon_Sack)),,] = tmp_harvesting_date_Sack_nc[rev((1:length(lon_Sack))),,]
+            }
+
+            crop_name_vec = c('maize (primary growing season)', 'soybean', 'wheat', 'winter wheat', 'rice (primary growing season)', 'rice (secondary growing season)', 'maize (secondary growing season)')
+            prescribed_planting_date_Sack = array(data = NA, dim = c(length(lon), length(lat), length(crop_name_vec)))
+            prescribed_harvesting_date_Sack = array(data = NA, dim = c(length(lon), length(lat), length(crop_name_vec)))
+            for (z in seq(crop_name_vec)){
+                tmp_plant = sp.regrid(spdata = tmp_planting_date_Sack_nc[,,z], lon.in = lon_Sack, lat.in = lat_Sack, lon.out = lon, lat.out = lat, method = 'mode')
+                tmp_har = sp.regrid(spdata = tmp_harvesting_date_Sack_nc[,,z], lon.in = lon_Sack, lat.in = lat_Sack, lon.out = lon, lat.out = lat, method = 'mode')
+                prescribed_planting_date_Sack[,,z] = tmp_plant
+                prescribed_harvesting_date_Sack[,,z] = tmp_har
+                print(paste0('Finished regridding planting and harvesting date for ', crop_name_vec[z]))
+            }
+
+            save(list = c('lon', 'lat', 'prescribed_planting_date_Sack', 'prescribed_harvesting_date_Sack', 'crop_name_vec'), file = filename)
+
+        } else {
+            print(paste0('Loading ', file, ' ...'))
+            load(filename)
+        }
+    }
+
+}
+
+################################################################################
 ### Rescale and interpolate PFT-level LAI and SAI data: (Yung & Tai, Feb 2019)
 ################################################################################
 
