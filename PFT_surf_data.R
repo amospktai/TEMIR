@@ -512,21 +512,19 @@ if ((biogeochem_flag && get_planting_date_option == 'prescribed-map') || O3_POD)
     
     if (dlon == 0.5 && dlat == 0.5){
         # Simulation resolution is the same as the data, can be read in directly from .nc
-        data_directory = '.../TEMIR_input/plant_har_date/'
         filename = 'Sack_crop_calendar.nc'
-        nc = nc_open(paste0(data_directory, filename))
+        nc = nc_open(paste0(planting_date_map_dir, filename))
         prescribed_planting_date_Sack = ncvar_get(nc, 'planting')
         prescribed_harvesting_date_Sack = ncvar_get(nc, 'harvest')
         nc_close(nc)
     } else {
         # Like the prescribed LAI and soil data, read in the RData contains the regridded data if it exists. Otherwise, regrid the data to a suitable resolution
-        data_directory = '.../TEMIR_input/plant_har_date/'
-        filename = paste0(data_directory,'crop_planting_harvesting_Sack_',dlat,'x',dlon,'.RData')
+        filename = paste0(planting_date_map_dir,'crop_planting_harvesting_Sack_',dlat,'x',dlon,'.RData')
         
         if (!file.exists(filename)){
             # Read in the nc file and regrid the data to the simulation resolution
             nc_filename = 'Sack_crop_calendar.nc'
-            nc = nc_open(paste0(data_directory, nc_filename))
+            nc = nc_open(paste0(planting_date_map_dir, nc_filename))
             tmp_planting_date_Sack_nc = ncvar_get(nc, 'planting')
             tmp_harvesting_date_Sack_nc = ncvar_get(nc, 'harvest')
             
@@ -567,8 +565,9 @@ if ((biogeochem_flag && get_planting_date_option == 'prescribed-map') || O3_POD)
             }
             
             save(list = c('lon', 'lat', 'prescribed_planting_date_Sack', 'prescribed_harvesting_date_Sack', 'crop_name_vec'), file = filename)
-            
+            rm(tmp_plant , tmp_har, crop_name_vec, lon_Sack, lat_Sack, lon_diff, lat_diff, z)
         } else {
+            print(paste0('Crop calender with suitable resolution is already existed.'))
             print(paste0('Loading ', file, ' ...'))
             load(filename)
         }

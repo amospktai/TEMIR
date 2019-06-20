@@ -78,7 +78,7 @@ if (!any(natveg_biomass_partitioning_scheme == c('CLM4.5','custom'))){stop("'nat
 #####prescribed_planting_date_flag 
 get_planting_date_option = 'CLM4.5'
 if (get_planting_date_option == 'prescribed-map'){
-    planting_date_map_dir = "/.../.../planting_date_map.nc"
+    planting_date_map_dir = '/Users/JackyPang/Desktop/TEMIR_run/run_dir_v1.1/TEMIR_inputs/Sack_plantingdate/'
 } else if (get_planting_date_option == 'prescribed-site') {
     prescribed_planting_date = 130
 } else if (get_planting_date_option == 'CLM4.5'){
