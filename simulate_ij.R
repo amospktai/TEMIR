@@ -120,20 +120,44 @@ f_simulate_ij = function(IJ) {
    alpha_soil_dry = soil_albedo[i,j,1]
    alpha_soil_sat = soil_albedo[i,j,3]
    
-   # [Crop model] climatic GDD for determining GDD_mat
-   if (biogeochem_flag){
-       if (get_GDDmat_method == "CLM4.5"){
-           GDD0 = GDD0_map[i,j]
-           GDD8 = GDD8_map[i,j]
-           GDD10 = GDD10_map[i,j]
-       } else if (get_GDDmat_method == "Sack") {
-           GDDmat_maize = GDDmat_maize_map[i,j]
-           GDDmat_wheat = GDDmat_wheat_map[i,j]
-           GDDmat_soybean = GDDmat_soybean_map[i,j]
+   # [Crop model] read in site and PFT planting date (POD or BGC), harvesting date (POD only) and GDDmat (BGC only)
+   if (biogeochem_flag || O3_POD) {
+       if (O3_POD || (biogeochem_flag && get_planting_date_option == 'prescribed-map')) {
+           # crop name in the Sack data set
+           # maize (primary growing season), soybean, wheat, winter wheat, rice (primary growing season), rice (secondary growing season), maize (secondary growing season)
+           if (any(ipft == c(18,19))) {
+               if (crop_growing_season == 'primary') {
+                   prescribed_planting_date = prescribed_planting_date_Sack[i,j,1]
+               } else if (crop_growing_season == 'secondary') {
+                   prescribed_planting_date = prescribed_planting_date_Sack[i,j,7]
+               }
+           } else if (any(ipft == c(20,21))) {
+               prescribed_planting_date = prescribed_planting_date_Sack[i,j,3]
+           } else if (any(ipft == c(22,23))) {
+               prescribed_planting_date = prescribed_planting_date_Sack[i,j,4]
+           } else if (any(ipft == c(24,25))) {
+               prescribed_planting_date = prescribed_planting_date_Sack[i,j,2]
+           } else {
+               prescribed_planting_date = NA
+           }
        }
        
-       if (get_planting_date_option == 'prescribed-map') {
-           prescribed_planting_date = planting_date_map[i,j]
+       if (O3_POD && !biogeochem_flag) {
+           # read in harvesting date only
+           # ... = prescribed_harvesting_date_Sack[i,j,x]
+       }
+       
+       if (!O3_POD && biogeochem_flag) {
+           # read in GDDmat
+           if (get_GDDmat_method == 'CLM4.5') {
+               GDD0 = GDD0_map[i,j]
+               GDD8 = GDD8_map[i,j]
+               GDD10 = GDD10_map[i,j]
+           } else if (get_GDDmat_method == 'Sack') {
+               GDDmat_maize = GDDmat_maize_map[i,j]
+               GDDmat_wheat = GDDmat_wheat_map[i,j]
+               GDDmat_soybean = GDDmat_soybean_map[i,j]
+           }
        }
    }
    
