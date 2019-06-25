@@ -100,6 +100,35 @@ f_simulate_ij = function(IJ) {
    alpha_soil_dry = soil_albedo[i,j,1]
    alpha_soil_sat = soil_albedo[i,j,3]
 
+   # [Crop model] read in site and PFT planting date (POD or BGC), harvesting date (POD only) and GDDmat (BGC only)
+   biogeochem_flag = FALSE
+   crop_growing_season = 'primary'
+   if (biogeochem_flag || O3_POD) {
+       if (O3_POD || (biogeochem_flag && get_planting_date_option == 'prescribed-map')) {
+           # crop name in the Sack data set
+           # maize (primary growing season), soybean, wheat, winter wheat, rice (primary growing season), rice (secondary growing season), maize (secondary growing season)
+           if (any(ipft == c(18,19))) {
+               if (crop_growing_season == 'primary') {
+                   prescribed_planting_date = prescribed_planting_date_Sack[i,j,1]
+               } else if (crop_growing_season == 'secondary') {
+                   prescribed_planting_date = prescribed_planting_date_Sack[i,j,7]
+               }
+           } else if (any(ipft == c(20,21))) {
+               prescribed_planting_date = prescribed_planting_date_Sack[i,j,3]
+           } else if (any(ipft == c(22,23))) {
+               prescribed_planting_date = prescribed_planting_date_Sack[i,j,4]
+           } else if (any(ipft == c(24,25))) {
+               prescribed_planting_date = prescribed_planting_date_Sack[i,j,2]
+           } else {
+               prescribed_planting_date = NA
+           }
+       }
+
+       if (O3_POD && !biogeochem_flag) {
+           # read in harvesting date only
+           # ... = prescribed_harvesting_date_Sack[i,j,x]
+       }
+
    # Other model parameters:
    met_cond_flag = TRUE
    colimit_flag = TRUE
