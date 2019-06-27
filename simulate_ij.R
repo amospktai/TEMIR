@@ -13,6 +13,7 @@
 # Oct 2018: Added new "Medlyn" stomatal conductance scheme in "Farquhar_Ball_Berry.R", and thus here necessary variables (e.g., vpd) are added. (Sun)
 # Feb 2019: Modified the way L_sun and L_sha are defined and calculated. We believe that A_can, R_can and g_can should be scaled up by LAI only, not by LAI + SAI. Therefore, L_sun and L_sha here should be sunlit and shaded leaf area index, not plant area index, but we still consider both LAI and SAI when calculating light extinction. Now they are renamed "LAI_sun" and "LAI_sha" and "LAI_sun" has to taken explicitly from canopy radiative transfer model. (Tai)
 # Feb 2019: Now aerodynamic conductance for heat, g_ah, is always calculated using either one of the two schemes (default from Monin_Obukhov.R vs. GEOS-Chem method in drydep_toolbox.R), and inputted into f_canopy_photosyn(). (Tai)
+# Jun 2019: Bug found in "PAR_absorb = f_PAR_absorb(PAR_beam=PAR_beam, ..., SAI=LAI, ...)". It should be "SAI=SAI" instead of "SAI=LAI". "L_sun" was systematically overestimated. Now fixed. However, this was a fix by Yung in v1.0 (9 Nov 2017), but it was somehow not included in v1.1. Now it has been fixed again by Ma (27 Jun 2019).
 
 ###############################################################################
 
@@ -435,8 +436,9 @@ f_simulate_ij = function(IJ) {
                I_beam_sha = canopy_albedo$I_beam_sha
                I_diff_sha = canopy_albedo$I_diff_sha
                # Find absorbed PAR:
+               # A bug was found below: "SAI=LAI". It should be "SAI=SAI". Now fixed by Yung (9 Nov 2017). However, this fix was somehow not included in v1.1. Now it is fixed again by Ma (27 Jun 2019).
                PAR_absorb = f_PAR_absorb(PAR_beam=PAR_beam, PAR_diff=PAR_diff, 
-                                         LAI=LAI, SAI=LAI, K_b=K_b, 
+                                         LAI=LAI, SAI=SAI, K_b=K_b, 
                                          I_beam_sun=I_beam_sun, 
                                          I_diff_sun=I_diff_sun, 
                                          I_beam_sha=I_beam_sha, 
