@@ -1,5 +1,4 @@
 # TEMIR
 Terrestrial Ecosystem Model in R
 
-New features in version 1.1
-- Two ozone dry deposition schemes based on Wesely (1989) and Zhang et al. (2003)
+This branch of TEMIR calculates ozone exposure metric POD3 (Phytotoxic Ozone Dose above 3 nmol m^-2 s^-1), using DOSE gs algrithm.

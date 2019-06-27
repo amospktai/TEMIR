@@ -11,6 +11,7 @@
 # Oct 2018: Added new "Medlyn" stomatal conductance scheme. (Sun)
 # Feb 2019: Modified the way L_sun and L_sha are defined and calculated. We believe that A_can, R_can and g_can should be scaled up by LAI only, not by LAI + SAI. Therefore, L_sun and L_sha here should be sunlit and shaded leaf area index, not plant area index, but we still consider both LAI and SAI when calculating light extinction. Now they are renamed "LAI_sun" and "LAI_sha" and "LAI_sun" has to taken explicitly from canopy radiative transfer model. (Tai)
 # Feb 2019: Now modified such that "g_ah" (aerodynamic conductance for heat, umol m^-2 s^-1 or m s^-1) is used instead of "g_am". (Tai, Feb 2019)
+# Mar 2019: A new function f_ozone_flux is added and used in f_canopy_photosyn to compute and pass leaf-level weighted instantaneous ozone flux
 
 ################################################################################
 ### Functions:
@@ -70,18 +71,18 @@ f_esat = function(T_K, derivative=FALSE) {
 
 # Leaf boundary-layer conductance (umol m^-2 s^-1 or m s^-1):
 f_boundary_cond = function(u_leaf, d_leaf=0.04, met_cond=FALSE, P_atm=101325, theta_atm=NULL) {
-    
+
     # Uses global constants: "R_uni=8.31446" universal gas constant (J K^-1 mol^-1)
     # Wind speed incident on leaf "u_leaf" (m s^-1) must be specified. "u_leaf" is equivalent to the friction velocity in this formulation.
     # Characteristic leaf dimension is typically "d_leaf=0.04" (m).
     # If "met_cond=TRUE", conductance will be given in the common meteorological unit of m s^-1.
     # "P_atm" = atmospheric pressure at reference height (Pa); "theta_atm" =  atmospheric potential temperature at reference height (K).
-    
+
     # Turbulent transfer coefficient (m s^-0.5):
     C_v = 0.01
     # Leaf boundary-layer conductance (m s^-1):
     g_b = C_v*(u_leaf/d_leaf)^0.5
-    
+
     # Convert to stomatal conductance (umol m^-2 s^-1 ) if necessary:
     if (met_cond) {
         # Do nothing.
@@ -90,15 +91,15 @@ f_boundary_cond = function(u_leaf, d_leaf=0.04, met_cond=FALSE, P_atm=101325, th
         mol_to_met = 1e-6*R_uni*theta_atm/P_atm
         g_b = g_b/mol_to_met
     }
-    
+
     return(g_b)
 }
 
 ################################################################################
 
 # Leaf stomatal conductance (umol m^-2 s^-1 or m s^-1):
-f_stomatal_cond = function(A_n, c_s=NULL, e_s=NULL, c_a=NULL, e_a=NULL, g_b=NULL, T_v=298.15, P_atm=101325, beta_t=1, C3_plant=TRUE, gs_scheme='FBB', met_cond=FALSE, theta_atm=NULL, g1_med=NULL) {
-    
+f_stomatal_cond = function(A_n, c_s=NULL, e_s=NULL, c_a=NULL, e_a=NULL, g_b=NULL, T_v=298.15, P_atm=101325, beta_t=1, C3_plant=TRUE, gs_scheme='FBB', met_cond=FALSE, theta_atm=NULL) {
+
     # Uses external functions "f_esat" and "quadroot".
     # Uses global constants: "R_uni=8.31446" universal gas constant (J K^-1 mol^-1)
     # Net photosynthesis rate "A_n" (umol CO2 m^-2 s^-1) must be specified.
@@ -108,63 +109,58 @@ f_stomatal_cond = function(A_n, c_s=NULL, e_s=NULL, c_a=NULL, e_a=NULL, g_b=NULL
     # "T_v" = vegetation temperature (K); "P_atm" = atmospheric pressure at reference height (Pa); "theta_atm" = atmospheric potential temperature at reference height (K); "beta_t" = soil water stress function (0 to 1)
     # "C3_plant=TRUE" specifies C3 photosynthesis; C4 otherwise.
     # If "met_cond=TRUE", conductance will be given in the common meteorological unit of m s^-1, and if "g_b" is specified it has to be in m s^-1 too.
-    
+
     # "gs_scheme" sets the stomatal conductance scheme to be used. It can either be the conventional Ball-Berry model ("FBB"), or the newer Medlyn model ("Medlyn") (see below).
-    
+
     # shsun 18/10/2017
     # Medlyn model to calculate stomatal conductance "g_s":
-    # "e_vpd" (kPa) = water vapor pressure deficit (VPD) at leaf surface;
+    # "e_vpd" (Pa) = water vapor pressure deficit (VPD) at leaf surface;
     # 1. If "e_s" (Pa) and "c_s" (Pa) are given, it calculates "g_s" directly;
     # 2. If "e_a" (Pa) adn "c_a" (Pa) and "g_b" (umol m^-2 s^-1 or m s^-1) are given, it calculates "g_s" via solving a quadratic equation using:
     #   e_s = (e_a/g_s+e_i/g_b)/(1/g_b+1/g_s)
     #   e_vpd = e_i-e_s
     #   g_s = 1.6*(1+m/e_vpd^0.5)*A_n*P_atm/c_s
     # Medlyn et al. 2011
-    
+
     # Saturation vapor pressure at leaf temperature (Pa):
     e_sat = f_esat(T_v)
-    
+
     if (met_cond) {
         if (is.null(theta_atm)) stop('theta_atm needs to be specified.')
         mol_to_met = 1e-6*R_uni*theta_atm/P_atm
     } else {
         # Do nothing.
     }
-    
+
     if (gs_scheme == 'Medlyn') {
-        m = g1_med*beta_t
-        b = 100
-        if (is.na(g1_med)) {  # if no parameter available, use previous C3/C4 param
-            if (C3_plant) {
-                m = 3.37*beta_t    # kPa^0.5
-                b = 100            # umol m^-2 s^-1
-            }else {
-                m = 1.1*beta_t      # kPa^0.5
-                b = 100             # umol m^-2 s^-1
-            }
+        if (C3_plant) {
+            m = 106.6*beta_t      # Pa^0.5
+            b = 10000             # umol m^-2 s^-1
+        } else {
+            m = 34.79*beta_t      # Pa^0.5
+            b = 40000             # umol m^-2 s^-1
         }
-        
         if (A_n <= 0) {
             g_s = b
         } else {
             if (!is.null(c_s) & !is.null(e_s)) {
-               
+
                 # put constraints on RH/vpd in MED mode
-                e_vpd = max(e_sat - e_s, 50)*0.001
+                e_vpd = max(e_sat - e_s, 50)
                 g_s = 1.6*(1 + m/(e_vpd^0.5))*A_n/(c_s/P_atm)
             } else {
                 if (is.null(c_a) | is.null(e_a) | is.null(g_b)) stop('All of c_a, e_a and g_b need to be specified.')
                 if (met_cond) g_b = g_b/mol_to_met
                 tmp_c_s = max(c(1e-6, (c_a - (1.4/g_b)*P_atm*A_n)), na.rm=TRUE)
                 c_s = tmp_c_s/P_atm
-                e_vpd = max(e_sat - e_a, 50)*0.001
-                
+                e_vpd = max(e_sat - e_a, 150)
+
                 term = 1.6*A_n/c_s
                 tmp_a = 1
                 tmp_b = -(2*b+2*term+term^2*m^2/(g_b*e_vpd))
                 tmp_c = b^2+2*b*term+term^2-m^2*term^2/e_vpd
                 judge = tmp_b^2-4*tmp_a*tmp_c
-                
+
                 if (judge > 0) {
                     gs_roots = quadroot(a=tmp_a, b=tmp_b, c=tmp_c)
                     g_s = max(gs_roots, na.rm = TRUE)
@@ -180,7 +176,7 @@ f_stomatal_cond = function(A_n, c_s=NULL, e_s=NULL, c_a=NULL, e_a=NULL, g_b=NULL
                     c_s = max(c(1e-6, (c_a - (1.4/g_b)*P_atm*A_n)), na.rm=TRUE)
                     gs_roots = quadroot(a=c_s, b=(c_s*(g_b - b) - m*A_n*P_atm), c=(-g_b*(c_s*b + m*A_n*P_atm*e_a/e_sat)))
                     g_s = max(gs_roots, na.rm=TRUE)
-                    
+
                 }
             }
         }
@@ -209,11 +205,11 @@ f_stomatal_cond = function(A_n, c_s=NULL, e_s=NULL, c_a=NULL, e_a=NULL, g_b=NULL
     } else {
        stop('Stomatal conductance scheme is not correctly specified!')
     }
-    
+
     # Convert to stomatal conductance (m s^-1) if necessary:
     if (met_cond) g_s = g_s*mol_to_met
     return(g_s)
-    
+
 }
 
 ################################################################################
@@ -235,7 +231,7 @@ f_H_Tv = function(T_v, DH_d, DS) (1 + exp((298.15*DS - DH_d)/(298.15*R_uni)))/(1
 
 # Leaf net photosynthesis rate (umol CO2 m^-2 s^-1):
 f_leaf_photosyn = function(c_i, phi, T_v=298.15, P_atm=101325, C3_plant=TRUE, V_cmax25_0, Phi_PSII=0.85, Theta_PSII=0.70, beta_t=1, acclimation=FALSE, T_10d=NULL, lat=0, decl=0, colimit=TRUE, canopy_avg=FALSE, sunlit=NULL, LAI=NULL, LAI_sun=NULL, K_n=0.30, K_b=0.50, biogeochem=FALSE, leaf_N_conc=NULL) {
-    
+
     # Uses external functions "f_Tv", "f_H_Tv" and "quadroot".
     # Uses global constants: "R_uni=8.31446" universal gas constant (J K^-1 mol^-1)
     # Intercellular CO2 partial pressure "c_i" (Pa), absorbed photosynthetically active radiation "phi" (W m^-2), and maximum rate of carboxylation at 25 degC (at top of canopy) "V_cmax25_0" (umol CO2 m^-2 s^-1) should always be provided.
@@ -247,7 +243,7 @@ f_leaf_photosyn = function(c_i, phi, T_v=298.15, P_atm=101325, C3_plant=TRUE, V_
    # *** Now modified such that if "canopy_avg=TRUE", "SAI" need not be provided, but the sunlit leaf area index, "LAI_sun", has to explicitly provided. (Tai, Feb 2019)
     # Canopy scaling uses the nitrogen and light extinction coefficient, "K_n" and "K_b", respectively.
     # If "biogeochem=TRUE", leaf mitochondrial respiration at 25 degC "R_d25" is calculated using leaf nitrogen concentration "leaf_N_conc" (g N m^-2 leaf area).
-    
+
     # Canopy scaling:
     if (canopy_avg) {
         # if (is.null(LAI) | is.null(SAI) | is.null(sunlit)) stop('LAI, SAI or sunlit parameters have to be provided to calculate canopy averages.')
@@ -266,7 +262,7 @@ f_leaf_photosyn = function(c_i, phi, T_v=298.15, P_atm=101325, C3_plant=TRUE, V_
     } else {
         f_Kn_Kb = 1
     }
-    
+
     # Daylength (s):
     arg = -sin(lat)*sin(decl)/(cos(lat)*cos(decl))
     arg = min(c(max(c(-1, arg), na.rm=TRUE), 1), na.rm=TRUE)
@@ -278,10 +274,10 @@ f_leaf_photosyn = function(c_i, phi, T_v=298.15, P_atm=101325, C3_plant=TRUE, V_
     DYL_max = 2*13750.9871*acos(arg)
     # Daylength adjustment function:
     f_DYL = min(c(max(c(0.01, DYL^2/DYL_max^2), na.rm=TRUE), 1), na.rm=TRUE)
-    
+
     # Maximum rate of carboxylation at 25 degC adjusted for daylength (umol CO2 m^-2 s^-1):
     V_cmax25 = V_cmax25_0*f_Kn_Kb*f_DYL
-    
+
     # Calculate leaf mitochondrial respiration both day and night:
     # Leaf mitochondrial respiration at 25 degC (umol CO2 m^-2 s^-1):
     if (biogeochem) {
@@ -297,7 +293,7 @@ f_leaf_photosyn = function(c_i, phi, T_v=298.15, P_atm=101325, C3_plant=TRUE, V_
         R_d = R_d25*(2^((T_v - 298.15)/10))/(1 + exp(1.3*(T_v - 328.15)))*beta_t
     }
     R_d = max(c(R_d, 0), na.rm=TRUE)
-    
+
     # Calculate leaf photosynthesis only for day time:
     if (phi <= 0) {
         # It is at night. Skip calculations.
@@ -306,7 +302,7 @@ f_leaf_photosyn = function(c_i, phi, T_v=298.15, P_atm=101325, C3_plant=TRUE, V_
         A_p = 0
         A = 0
     } else {
-        
+
         # Michaelis-Menton constant for carboxylation at 25 degC (Pa):
         K_c25 = 404.9e-6*P_atm
         # Michaelis-Menton constant for oxygenation at 25 degC (Pa):
@@ -315,12 +311,12 @@ f_leaf_photosyn = function(c_i, phi, T_v=298.15, P_atm=101325, C3_plant=TRUE, V_
         Gamma_star25 = 42.75e-6*P_atm
         # Intercellular oxygen concentration (Pa):
         o_i = 0.209*P_atm
-        
+
         # Product utilization rate at 25 degC (umol CO2 m^-2 s^-1):
         T_p25 = 0.167*V_cmax25
         # Initial slope of C4 CO2 response curve at 25 degC (Pa/Pa):
         k_p25 = 20000*V_cmax25
-        
+
         # Temperature acclimation:
         if (acclimation) {
             if (is.null(T_10d)) stop('T_10d needs to be provided to calculate acclimation.')
@@ -344,9 +340,9 @@ f_leaf_photosyn = function(c_i, phi, T_v=298.15, P_atm=101325, C3_plant=TRUE, V_
             DS_Vcmax = 485
             DS_Jmax = 495
         }
-        
+
         if (C3_plant) {
-            
+
             # Maximum rate of carboxylation adjusted for soil water stress (umol CO2 m^-2 s^-1):
             V_cmax = V_cmax25*f_Tv(T_v=T_v, DH_a=DH_a_Vcmax)*f_H_Tv(T_v=T_v, DH_d=DH_d_Vcmax, DS=DS_Vcmax)*beta_t
             # CO2 compensation point (Pa):
@@ -357,7 +353,7 @@ f_leaf_photosyn = function(c_i, phi, T_v=298.15, P_atm=101325, C3_plant=TRUE, V_
             K_o = K_o25*f_Tv(T_v=T_v, DH_a=36380)
             # Rubisco-limited photosynthesis rate (umol CO2 m^-2 s^-1):
             A_c = V_cmax*(c_i - Gamma_star)/(c_i + K_c*(1 + o_i/K_o))
-            
+
             # Light utilized in electron transport by photosystem II (umol m^-2 s^-1):
             # I_PSII = 0.5*Phi_PSII*alpha_l*I_l
             I_PSII = 0.5*Phi_PSII*(4.6*phi)
@@ -370,33 +366,33 @@ f_leaf_photosyn = function(c_i, phi, T_v=298.15, P_atm=101325, C3_plant=TRUE, V_
             Gamma_star = Gamma_star25*f_Tv(T_v=T_v, DH_a=37830)
             # RuBP-limited photosynthesis rate (umol CO2 m^-2 s^-1):
             A_j = J*(c_i - Gamma_star)/(4*c_i + 8*Gamma_star)
-            
+
             # Triose phosphate utilization rate (for C3 plants only) (umol m^-2 s^-1):
             T_p = T_p25*f_Tv(T_v=T_v, DH_a=DH_a_Vcmax)*f_H_Tv(T_v=T_v, DH_d=DH_d_Vcmax, DS=DS_Vcmax)
             # Product-limited photosynthesis rate (umol CO2 m^-2 s^-1):
             A_p = 3*T_p
-            
+
         } else {
-            
+
             # Maximum rate of carboxylation adjusted for soil water stress (umol CO2 m^-2 s^-1):
             V_cmax = V_cmax25*(2^((T_v - 298.15)/10))/((1 + exp(0.3*(T_v - 313.15)))*(1 + exp(0.2*(288.15 - T_v))))*beta_t
             # Rubisco-limited photosynthesis rate (umol CO2 m^-2 s^-1):
             A_c = V_cmax
-            
+
             # RuBP-limited photosynthesis rate (umol CO2 m^-2 s^-1):
             A_j = 0.05*(4.6*phi)
-            
+
             # Initial slope of C4 CO2 response curve (Pa/Pa):
             k_p = k_p25*2^((T_v - 298.15)/10)
             # Product-limited photosynthesis rate (umol CO2 m^-2 s^-1):
             A_p = k_p*c_i/P_atm
-            
+
         }
-        
+
         A_c = max(c(A_c, 0), na.rm=TRUE)
         A_j = max(c(A_j, 0), na.rm=TRUE)
         A_p = max(c(A_p, 0), na.rm=TRUE)
-        
+
         # Gross photosynthesis rate (umol CO2 m^-2 s^-1):
         if (colimit) {
             if (C3_plant) Theta_cj = 0.98 else Theta_cj = 0.80
@@ -408,22 +404,42 @@ f_leaf_photosyn = function(c_i, phi, T_v=298.15, P_atm=101325, C3_plant=TRUE, V_
         } else {
             A = min(c(A_c, A_j, A_p), na.rm=TRUE)
         }
-        
+
     }
-    
+
     # Net photosynthesis rate (umol CO2 m^-2 s^-1):
     A_n = A - R_d
-    
+
     output = list(A_c=A_c, A_j=A_j, A_p=A_p, A=A, R_d=R_d, A_n=A_n)
     return(output)
-    
+
+}
+
+################################################################################
+
+# This function is a new function based on f_ozone_impact
+# It calculates leaf-level instantaneous ozone flux
+# It uses ozone concentration, g_s, g_b and g_am
+# Sadiq, Mar 2019
+
+f_ozone_flux = function(O3_conc, g_s, g_b, g_ah, P_atm=101325, theta_atm=298.15) {
+
+  # Unit conversion of [O3]: ppbv to nmol m^-3:
+  O3_conc_nmol = O3_conc*P_atm/(theta_atm*R_uni)
+  # Instantaneous ozone flux (nmol m^-2 s^-1), leaf-level:
+  # note: k_O3/g_s is modified to 1/g_s, because DOSE gs scheme computes gs for ozone rather than for water vapour
+  # if want to simulate POD with FBB gs scheme, k_O3 should be added here
+  O3_flux_ll = O3_conc_nmol/(1/g_s + 1/g_b + 1/g_ah)
+
+  output = list(O3_flux_ll=O3_flux_ll)
+  return(output)
 }
 
 ################################################################################
 
 # Ozone impact factors to adjust photosynthesis and/or stomatal conductance (0 to 1):
 f_ozone_impact = function(O3_conc, g_s, g_b, g_ah, P_atm=101325, theta_atm=298.15, met_cond=TRUE, scheme='Lombardozzi', dt=3600, LAI=0.5, LAI_prev=0.5, evergreen=FALSE, leaf_long=1e3, CUO_prev=0, sensitivity='high', plant_group='broadleaf') {
-    
+
     # Uses global constants: "R_uni=8.31446" universal gas constant (J K^-1 mol^-1)
     # Atmospheric ozone concentration "O3_conc" (ppb), stomatal "g_s", leaf boundary-layer "g_b" and aerodynamic "g_am" conductances (for momentum) (umol m^-2 s^-1 or m s^-1) have to be always specified.
     # *** Now modified such that "g_ah" (aerodynamic conductance for heat, umol m^-2 s^-1 or m s^-1) is used instead. (Tai, Feb 2019)
@@ -434,7 +450,7 @@ f_ozone_impact = function(O3_conc, g_s, g_b, g_ah, P_atm=101325, theta_atm=298.1
     # If "evergreen=TRUE", plant type considered is evergreen.
     # "sensitivity" should either be set to "high", "average" or "low" for the Lombardozzi scheme, or just "high" or "low" for the Sitch scheme.
     # "plant_group" should be one of "broadleaf", "needleleaf", "C3_grass", "C4_grass" or "shrub".
-    
+
     if (met_cond) {
         # Do nothing.
     } else {
@@ -445,7 +461,7 @@ f_ozone_impact = function(O3_conc, g_s, g_b, g_ah, P_atm=101325, theta_atm=298.1
         # g_am = g_am*mol_to_met
         g_ah = g_ah*mol_to_met
     }
-    
+
     # Convert from ppb to nmol m^-3:
     O3_conc_nmol = O3_conc*P_atm/(theta_atm*R_uni)
     # O3:H2O resistance ratio defined by Sitch et al. (2007):
@@ -454,9 +470,9 @@ f_ozone_impact = function(O3_conc, g_s, g_b, g_ah, P_atm=101325, theta_atm=298.1
     O3_flux = O3_conc_nmol/(k_O3/g_s + 1/g_b + 1/g_ah)
     # This follows Lombardozzi et al. [2015], but it seems more appropriate to use g_ah or g_aw instead of g_am to calculate ozone flux.
     # Now modified such that "g_ah" is used instead. (Tai, Feb 2019)
-    
+
     if (scheme == 'Lombardozzi') {
-        
+
         # Add a threshold of uptake (nmol m^-2 s^-1):
         O3_flux_th = 0.8
         O3_flux_crit = max(c(0, (O3_flux - O3_flux_th)), na.rm=TRUE)
@@ -464,7 +480,7 @@ f_ozone_impact = function(O3_conc, g_s, g_b, g_ah, P_atm=101325, theta_atm=298.1
         dt_hr = dt/3600
         # Ozone flux per time step (mmol m^-2):
         O3_flux_dt = O3_flux_crit*1e-6*dt
-        
+
         if (LAI > 0.5) {
             # Minimize O3 damage to new leaves:
             if (LAI > LAI_prev) heal = max(c(0, (LAI - LAI_prev)/LAI*O3_flux_dt), na.rm=TRUE) else heal = 0
@@ -477,7 +493,7 @@ f_ozone_impact = function(O3_conc, g_s, g_b, g_ah, P_atm=101325, theta_atm=298.1
         } else {
             CUO = 0
         }
-        
+
         # PFT-specific ozone damage parameters:
         if (sensitivity == 'high') {
             needle_An_int = 1.083
@@ -519,7 +535,7 @@ f_ozone_impact = function(O3_conc, g_s, g_b, g_ah, P_atm=101325, theta_atm=298.1
             grass_gs_int = 0.7511
             grass_gs_slope = 0
         }
-        
+
         # Ozone impact factors:
         if (CUO == 0) {
             O3_coef_An = 1
@@ -538,13 +554,13 @@ f_ozone_impact = function(O3_conc, g_s, g_b, g_ah, P_atm=101325, theta_atm=298.1
                 stop('plant_group is not correctly specified!')
             }
         }
-        
+
     } else if (scheme == 'Sitch') {
-        
+
         # Add a threshold of uptake (nmol m^-2 s^-1):
         if (plant_group == 'C3_grass' | plant_group == 'C4_grass') O3_flux_th = 5.0 else O3_flux_th = 1.6
         O3_flux_crit = max(c(0, (O3_flux - O3_flux_th)), na.rm=TRUE)
-        
+
         # Ozone sensitivity parameter:
         a = 0
         if (sensitivity == 'high') {
@@ -564,19 +580,19 @@ f_ozone_impact = function(O3_conc, g_s, g_b, g_ah, P_atm=101325, theta_atm=298.1
         } else {
             stop('sensitivity is not correctly specified!')
         }
-        
+
         # Ozone impact factors:
         O3_coef_An = max(c(0, (1 - a*O3_flux_crit)), na.rm=TRUE)
         O3_coef_gs = 1
         CUO = 0
-        
+
     } else {
         stop('scheme is not correctly specified!')
     }
-    
+
     output = list(O3_coef_An=O3_coef_An, O3_coef_gs=O3_coef_gs, CUO=CUO)
     return(output)
-    
+
 }
 
 ################################################################################
@@ -590,7 +606,7 @@ f_ci = function() {
     A_n = leaf_photosyn$A_n
     R_d = leaf_photosyn$R_d
     # Leaf stomatal conductance (umol m^-2 s^-1):
-    g_s = f_stomatal_cond(A_n=A_n, c_a=c_a, e_a=e_a, g_b=g_b, T_v=T_v, P_atm=P_atm, beta_t=beta_t, C3_plant=C3_plant, met_cond=FALSE, g1_med=g1_med)
+    g_s = f_stomatal_cond(A_n=A_n, c_a=c_a, e_a=e_a, g_b=g_b, T_v=T_v, P_atm=P_atm, beta_t=beta_t, C3_plant=C3_plant, met_cond=FALSE)
     # Revised "c_i":
     ci_new = c_a - (1.4/g_b + 1.6/g_s)*P_atm*A_n
     if (A_n <= 0) fval = 0 else fval = c_i - ci_new
@@ -614,7 +630,7 @@ f_ci2 = function() {
     if (A_n > 0) A_n = A_n*max(c(0, min(c(O3_coef_An, 1), na.rm=TRUE)), na.rm=TRUE)
     # R_d = R_d*max(c(0, min(c(O3_coef_An, 1), na.rm=TRUE)), na.rm=TRUE)
     # Leaf stomatal conductance (umol m^-2 s^-1):
-    g_s = f_stomatal_cond(A_n=A_n, c_a=c_a, e_a=e_a, g_b=g_b, T_v=T_v, P_atm=P_atm, beta_t=beta_t, C3_plant=C3_plant, met_cond=FALSE, g1_med=g1_med)
+    g_s = f_stomatal_cond(A_n=A_n, c_a=c_a, e_a=e_a, g_b=g_b, T_v=T_v, P_atm=P_atm, beta_t=beta_t, C3_plant=C3_plant, met_cond=FALSE)
     # Ozone impact factor on photosynthesis:
     ozone_impact = f_ozone_impact(O3_conc=O3_conc, g_s=g_s, g_b=g_b, g_ah=g_ah, P_atm=P_atm, theta_atm=theta_atm, met_cond=FALSE, scheme='Sitch', sensitivity=sensitivity, plant_group=plant_group)
     O3_coef_An_new = ozone_impact$O3_coef_An
@@ -630,8 +646,8 @@ f_ci2 = function() {
 ################################################################################
 
 # Solving for leaf photosynthesis (umol CO2 m^-2 s^-1), stomatal conductance and boundary-layer conductance (umol m^-2 s^-1 or m s^-1) with the Farquhar-Ball-Berry model:
-f_Farquhar_Ball_Berry = function(c_a, e_a, phi, T_v=298.15, P_atm=101325, theta_atm=298.15, C3_plant=TRUE, V_cmax25_0, Phi_PSII=0.85, Theta_PSII=0.70, beta_t=1, acclimation=FALSE, T_10d=NULL, lat=0, decl=0, colimit=TRUE, canopy_avg=FALSE, sunlit=NULL, LAI=NULL, LAI_sun=NULL, K_n=0.30, K_b=0.50, O3_damage=FALSE, O3_conc=NULL, scheme='Lombardozzi', gs_scheme = 'FBB', dt=3600, LAI_prev=NULL, evergreen=FALSE, leaf_long=1e3, CUO_prev=0, sensitivity='high', plant_group='broadleaf', g_ah=NULL, biogeochem=FALSE, leaf_N_conc=NULL, u_leaf, d_leaf=0.04, met_cond=FALSE, tol=1e-3, g1_med=NULL) {
-    
+f_Farquhar_Ball_Berry = function(c_a, e_a, phi, T_v=298.15, P_atm=101325, theta_atm=298.15, C3_plant=TRUE, V_cmax25_0, Phi_PSII=0.85, Theta_PSII=0.70, beta_t=1, acclimation=FALSE, T_10d=NULL, lat=0, decl=0, colimit=TRUE, canopy_avg=FALSE, sunlit=NULL, LAI=NULL, LAI_sun=NULL, K_n=0.30, K_b=0.50, O3_damage=FALSE, O3_conc=NULL, scheme='Lombardozzi', gs_scheme = 'FBB', dt=3600, LAI_prev=NULL, evergreen=FALSE, leaf_long=1e3, CUO_prev=0, sensitivity='high', plant_group='broadleaf', g_ah=NULL, biogeochem=FALSE, leaf_N_conc=NULL, u_leaf, d_leaf=0.04, met_cond=FALSE, tol=1e-3) {
+
     # Uses external functions "f_boundary_cond", "f_leaf_photosyn", "f_stomatal_cond", "f_ozone_impact", and "f_ci".
     # Uses global constants: "R_uni = 8.31446" universal gas constant (J K^-1 mol^-1)
     # Atmospheric CO2 partial pressure "c_a" (Pa), vapor pressure in canopy air "e_a" (Pa), absorbed photosynthetically active radiation "phi" (W m^-2), maximum rate of carboxylation at 25 degC (at top of canopy) "V_cmax25_0" (umol CO2 m^-2 s^-1), "sunlit=TRUE/FALSE", leaf area index "LAI" (m^2 m^-2), and wind speed incident on leaf "u_leaf" (m s^-1) must be specified.
@@ -653,29 +669,29 @@ f_Farquhar_Ball_Berry = function(c_a, e_a, phi, T_v=298.15, P_atm=101325, theta_
     # Characteristic leaf dimension is typically "d_leaf=0.04" (m).
     # If "met_cond=TRUE", conductance will be given in the common meteorological unit of m s^-1.
     # "tol" specifies the absolute difference smaller than which iteration can stop.
-    
+
     # Leaf boundary-layer conductance (umol m^-2 s^-1):
     g_b = f_boundary_cond(u_leaf=u_leaf, d_leaf=d_leaf, met_cond=FALSE, P_atm=P_atm, theta_atm=theta_atm)
-    
+
     if (O3_damage) {
-        
+
         # # Aerodynamic conductance (for momentum) (m s^-1):
         # # Assume that "u_leaf" is equivalent to friction velocity "u_star":
         # g_am = u_leaf^2/u_atm
         # # Aerodynamic conductance (for momentum) (umol m^-2 s^-1):
         # mol_to_met = 1e-6*R_uni*theta_atm/P_atm
         # g_am = g_am/mol_to_met
-        
+
         # Now modified such that "g_ah" (aerodynamic conductance for heat) is used instead, which is an input now. (Tai, Feb 2019)
         mol_to_met = 1e-6*R_uni*theta_atm/P_atm
         # Aerodynamic conductance (for heat) (umol m^-2 s^-1) (conversion is needed because in f_ci() and f_ci2() conductances are all in molar unit):
         if (is.null(g_ah)) stop('g_ah is not provided!')
         if (met_cond) g_ah = g_ah/mol_to_met
-        
+
     }
-    
+
     if (O3_damage & scheme == 'Sitch') {
-        
+
         environment(f_ci2) = environment()
         # Iterations:
         # Use bivariate secant updating method...
@@ -730,9 +746,9 @@ f_Farquhar_Ball_Berry = function(c_a, e_a, phi, T_v=298.15, P_atm=101325, theta_
         A_n = Fval$A_n
         R_d = Fval$R_d
         g_s = Fval$g_s
-        
+
     } else {
-        
+
         environment(f_ci) = environment()
         # Iterations:
         # Use univariate secant method...
@@ -787,12 +803,12 @@ f_Farquhar_Ball_Berry = function(c_a, e_a, phi, T_v=298.15, P_atm=101325, theta_
         A_n = fval$A_n
         R_d = fval$R_d
         g_s = fval$g_s
-        
+
     }
-    
+
     # CO2 partial pressure at leaf surface (Pa):
     c_s = max(c(1e-6, (c_a - (1.4/g_b)*P_atm*A_n)), na.rm=TRUE)
-    
+
     if (O3_damage & scheme == 'Lombardozzi') {
         ozone_impact = f_ozone_impact(O3_conc=O3_conc, g_s=g_s, g_b=g_b, g_ah=g_ah, P_atm=P_atm, theta_atm=theta_atm, met_cond=FALSE, scheme='Lombardozzi', dt=dt, LAI=LAI, LAI_prev=LAI_prev, evergreen=evergreen, leaf_long=leaf_long, CUO_prev=CUO_prev, sensitivity=sensitivity, plant_group=plant_group)
         O3_coef_An = ozone_impact$O3_coef_An
@@ -812,7 +828,7 @@ f_Farquhar_Ball_Berry = function(c_a, e_a, phi, T_v=298.15, P_atm=101325, theta_
         O3_coef_An = 1
         O3_coef_gs = 1
     }
-    
+
     if (met_cond) {
         mol_to_met = 1e-6*R_uni*theta_atm/P_atm
         g_b = g_b*mol_to_met
@@ -820,18 +836,18 @@ f_Farquhar_Ball_Berry = function(c_a, e_a, phi, T_v=298.15, P_atm=101325, theta_
     } else {
         # Do nothing.
     }
-    
+
     output = list(c_i=c_i, c_s=c_s, g_b=g_b, g_s=g_s, A_n=A_n, R_d=R_d, CUO=CUO, O3_coef_An=O3_coef_An, O3_coef_gs=O3_coef_gs, n_itr=n_itr)
     return(output)
-    
+
 }
 
 
 ################################################################################
 
 # Find canopy-integrated photosynthesis (umol CO2 m^-2 s^-1) and conductance (umol m^-2 s^-1 or m s^-1):
-f_canopy_photosyn = function(c_a, e_a, phi_sun, phi_sha, T_v=298.15, P_atm=101325, theta_atm=298.15, C3_plant=TRUE, V_cmax25_0, Phi_PSII=0.85, Theta_PSII=0.70, beta_t=1, acclimation=TRUE, T_10d=298.15, lat=0, decl=0, colimit=TRUE, LAI, LAI_sun, K_n=0.30, K_b=0.50, O3_damage=FALSE, O3_conc=NULL, scheme='Lombardozzi', gs_scheme = 'FBB', dt=3600, LAI_prev=NULL, evergreen=FALSE, leaf_long=1e3, CUO_prev_sun=0, CUO_prev_sha=0, sensitivity='high', plant_group='broadleaf', g_ah=NULL, biogeochem=FALSE, leaf_N_conc=NULL, u_leaf, d_leaf=0.04, met_cond=FALSE, tol=1e-3,g1_med=NULL) {
-    
+f_canopy_photosyn = function(c_a, e_a, phi_sun, phi_sha, T_v=298.15, P_atm=101325, theta_atm=298.15, C3_plant=TRUE, V_cmax25_0, Phi_PSII=0.85, Theta_PSII=0.70, beta_t=1, acclimation=TRUE, T_10d=298.15, lat=0, decl=0, colimit=TRUE, LAI, LAI_sun, K_n=0.30, K_b=0.50, O3_damage=FALSE, O3_POD=TRUE, O3_conc=NULL, vpd=vpd, f_phen_pft, scheme='Lombardozzi', gs_scheme = 'FBB', dt=3600, LAI_prev=NULL, evergreen=FALSE, leaf_long=1e3, CUO_prev_sun=0, CUO_prev_sha=0, POD_prev=0, crop_harvest = crop_harest, n_day_whole=n_day_whole, sensitivity='high', plant_group='broadleaf', g_ah=NULL, biogeochem=FALSE, leaf_N_conc=NULL, u_leaf, d_leaf=0.04, met_cond=TRUE, tol=1e-3) {
+
     # Uses external function "f_Farquhar_Ball_Berry".
     # Uses global constants: "R_uni = 8.31446" universal gas constant (J K^-1 mol^-1)
     # Atmospheric CO2 partial pressure "c_a" (Pa), vapor pressure in canopy air "e_a" (Pa), absorbed photosynthetically active radiation by sunlit and shaded leaves, "phi_sun" and "phi_sha" (W m^-2), maximum rate of carboxylation at 25 degC (at top of canopy) "V_cmax25_0" (umol CO2 m^-2 s^-1), leaf area index "LAI" (m^2 m^-2), and wind speed incident on leaf "u_leaf" (m s^-1) must be specified.
@@ -844,56 +860,56 @@ f_canopy_photosyn = function(c_a, e_a, phi_sun, phi_sha, T_v=298.15, P_atm=10132
     # Characteristic leaf dimension is typically "d_leaf=0.04" (m).
     # If "met_cond=TRUE", conductance will be given in the common meteorological unit of m s^-1.
    # *** Now modified such that "u_atm" is not needed anymore because we directly read in "g_ah" (aerodynamic conductance for heat, umol m^-2 s^-1 or m s^-1) as input. (Tai, Feb 2019)
-    
+
     # Sunlit leaves:
-    FBB_sun = f_Farquhar_Ball_Berry(c_a=c_a, e_a=e_a, phi=phi_sun, T_v=T_v, 
-                                    P_atm=P_atm, theta_atm=theta_atm, 
-                                    C3_plant=C3_plant, V_cmax25_0=V_cmax25_0, 
-                                    Phi_PSII=Phi_PSII, Theta_PSII=Theta_PSII, 
-                                    beta_t=beta_t, acclimation=acclimation, 
-                                    T_10d=T_10d, lat=lat, decl=decl, 
-                                    colimit=colimit, canopy_avg=TRUE, 
-                                    sunlit=TRUE, LAI=LAI, LAI_sun=LAI_sun, 
-                                    K_n=K_n, K_b=K_b, O3_damage=O3_damage, 
-                                    O3_conc=O3_conc, scheme=scheme, 
-                                    gs_scheme=gs_scheme, dt=dt, 
-                                    LAI_prev=LAI_prev, evergreen=evergreen, 
-                                    leaf_long=leaf_long, CUO_prev=CUO_prev_sun, 
-                                    sensitivity=sensitivity, 
-                                    plant_group=plant_group, 
-                                    g_ah=g_ah, biogeochem=biogeochem, 
-                                    leaf_N_conc=leaf_N_conc, u_leaf=u_leaf, 
-                                    d_leaf=d_leaf, met_cond=met_cond, tol=tol,g1_med=g1_med)
+    FBB_sun = f_Farquhar_Ball_Berry(c_a=c_a, e_a=e_a, phi=phi_sun, T_v=T_v,
+                                    P_atm=P_atm, theta_atm=theta_atm,
+                                    C3_plant=C3_plant, V_cmax25_0=V_cmax25_0,
+                                    Phi_PSII=Phi_PSII, Theta_PSII=Theta_PSII,
+                                    beta_t=beta_t, acclimation=acclimation,
+                                    T_10d=T_10d, lat=lat, decl=decl,
+                                    colimit=colimit, canopy_avg=TRUE,
+                                    sunlit=TRUE, LAI=LAI, LAI_sun=LAI_sun,
+                                    K_n=K_n, K_b=K_b, O3_damage=O3_damage,
+                                    O3_conc=O3_conc, scheme=scheme,
+                                    gs_scheme=gs_scheme, dt=dt,
+                                    LAI_prev=LAI_prev, evergreen=evergreen,
+                                    leaf_long=leaf_long, CUO_prev=CUO_prev_sun,
+                                    sensitivity=sensitivity,
+                                    plant_group=plant_group,
+                                    g_ah=g_ah, biogeochem=biogeochem,
+                                    leaf_N_conc=leaf_N_conc, u_leaf=u_leaf,
+                                    d_leaf=d_leaf, met_cond=met_cond, tol=tol)
     A_nsun = FBB_sun$A_n
     R_dsun = FBB_sun$R_d
     g_ssun = FBB_sun$g_s
     g_b = FBB_sun$g_b
     CUO_sun = FBB_sun$CUO
-    
+
     # Shaded leaves:
-    FBB_sha = f_Farquhar_Ball_Berry(c_a=c_a, e_a=e_a, phi=phi_sha, T_v=T_v, 
-                                    P_atm=P_atm, theta_atm=theta_atm, 
-                                    C3_plant=C3_plant, V_cmax25_0=V_cmax25_0, 
-                                    Phi_PSII=Phi_PSII, Theta_PSII=Theta_PSII, 
-                                    beta_t=beta_t, acclimation=acclimation, 
-                                    T_10d=T_10d, lat=lat, decl=decl, 
-                                    colimit=colimit, canopy_avg=TRUE, 
-                                    sunlit=FALSE, LAI=LAI, LAI_sun=LAI_sun, 
-                                    K_n=K_n, K_b=K_b, O3_damage=O3_damage, 
-                                    O3_conc=O3_conc, scheme=scheme, 
-                                    gs_scheme=gs_scheme, dt=dt, 
-                                    LAI_prev=LAI_prev, evergreen=evergreen, 
-                                    leaf_long=leaf_long, CUO_prev=CUO_prev_sha, 
-                                    sensitivity=sensitivity, 
-                                    plant_group=plant_group, 
-                                    g_ah=g_ah, biogeochem=biogeochem, 
-                                    leaf_N_conc=leaf_N_conc, u_leaf=u_leaf, 
-                                    d_leaf=d_leaf, met_cond=met_cond, tol=tol,g1_med=g1_med)
+    FBB_sha = f_Farquhar_Ball_Berry(c_a=c_a, e_a=e_a, phi=phi_sha, T_v=T_v,
+                                    P_atm=P_atm, theta_atm=theta_atm,
+                                    C3_plant=C3_plant, V_cmax25_0=V_cmax25_0,
+                                    Phi_PSII=Phi_PSII, Theta_PSII=Theta_PSII,
+                                    beta_t=beta_t, acclimation=acclimation,
+                                    T_10d=T_10d, lat=lat, decl=decl,
+                                    colimit=colimit, canopy_avg=TRUE,
+                                    sunlit=FALSE, LAI=LAI, LAI_sun=LAI_sun,
+                                    K_n=K_n, K_b=K_b, O3_damage=O3_damage,
+                                    O3_conc=O3_conc, scheme=scheme,
+                                    gs_scheme=gs_scheme, dt=dt,
+                                    LAI_prev=LAI_prev, evergreen=evergreen,
+                                    leaf_long=leaf_long, CUO_prev=CUO_prev_sha,
+                                    sensitivity=sensitivity,
+                                    plant_group=plant_group,
+                                    g_ah=g_ah, biogeochem=biogeochem,
+                                    leaf_N_conc=leaf_N_conc, u_leaf=u_leaf,
+                                    d_leaf=d_leaf, met_cond=met_cond, tol=tol)
     A_nsha = FBB_sha$A_n
     R_dsha = FBB_sha$R_d
     g_ssha = FBB_sha$g_s
     CUO_sha = FBB_sha$CUO
-    
+
     # Sunlit and shaded plant area index:
     # Make sure K_b > 0 always. At night, set K_b = 1e6.
     # We believe that A_can, R_can and g_can should be scaled up by LAI only, not by LAI + SAI. Therefore, L_sun and L_sha here should be sunlit and shaded leaf area index, not plant area index, but we still consider both LAI and SAI when calculating light extinction. Now they are renamed "LAI_sun" and "LAI_sha" and "LAI_sun" has to taken explicitly from canopy radiative transfer model. (Tai, Feb 2019)
@@ -901,23 +917,61 @@ f_canopy_photosyn = function(c_a, e_a, phi_sun, phi_sha, T_v=298.15, P_atm=10132
     # L_sha = (LAI + SAI) - L_sun
     # Shaded leaf area index:
     LAI_sha = LAI - LAI_sun
-    
+
     # Canopy photosynthesis (umol CO2 m^-2 s^-1) and conductance (umol m^-2 s^-1 or m s^-1):
     # "A_can" used to mean NET canopy photosynthesis, but to be consistent with literature, we decided to modify its definition to directly mean GROSS canopy photosynthesis, i.e., GPP, so that GPP = A_can instead of GPP = A_can + R_can as previously done. (Tai, Feb 2018)
     # A_can = A_nsun*L_sun + A_nsha*L_sha
     A_can = (A_nsun + R_dsun)*LAI_sun + (A_nsha + R_dsha)*LAI_sha
     R_can = R_dsun*LAI_sun + R_dsha*LAI_sha
     g_can = LAI_sun/(1/g_b + 1/g_ssun) + LAI_sha/(1/g_b + 1/g_ssha)
-    
+
     # The way to calculate CUO below is not right... We will have to correct it . (Tai, Feb 2019)
     CUO_can = CUO_sun*LAI_sun + CUO_sha*LAI_sha
-    
+
     # Stomatal conductance weighted by sunlit and shaded fraction (umol m^-2 s^-1 or m s^-1):
     g_s = (g_ssun*LAI_sun + g_ssha*LAI_sha)/(LAI_sun + LAI_sha)
+
+    # POD3 (Phytotoxic Ozone Dose above 3 nmol m^-2 s^-1) calculation
+    # Sadiq, Mar 2019
+    if (O3_POD) {
+      if(gs_scheme == 'DOSE'){ # DOSE gs scheme
+        r.s_dose = r.s.dose(P_atm=P_atm, theta_atm=theta_atm, 
+                            f.phen = f_phen_pft, T_v = T_v, 
+                            par_sun = phi_sun, par_sha = phi_sha, 
+                            f_sun = LAI_sun/LAI, vpd = vpd)
+        r_s = r.s_dose$r_s
+        f_phen = r.s_dose$f_phen
+        f_light = r.s_dose$f_light
+        f_tds = r.s_dose$f_tds
+        f_t = r.s_dose$f_t
+        f_d = r.s_dose$f_d
+        
+        g_s = 1/r_s
+      }
+      # compute leaf-level instantanous ozone flux
+      O3_flux = f_ozone_flux(O3_conc=O3_conc, g_s=g_s, g_b=g_b, 
+                             g_ah=g_ah, P_atm=P_atm, theta_atm=theta_atm)
+      O3_flux_ll = O3_flux$O3_flux_ll # leaf-level ozone flux
+      O3_flux_th = 3                  # threshold: 3 nmol m^-2 s^-1
+      O3_flux_crit = max(c(0, (O3_flux_ll - O3_flux_th)), na.rm=TRUE) # critical flux above the threshold, nmol m^-2 s^-1
+      # Model time step in seconds (assumed time step to be 1 hour, change later):
+      dt = 3600
+      # Ozone flux per time step (mmol m^-2):
+      O3_flux_dt = O3_flux_crit*1e-6*dt
+      
+      # accumulation of POD following crop calendar data (crop_harvest_date) [Sacks et al., 2010]
+      if(!is.na(crop_harvest)){
+        if(n_day_whole > (crop_harvest - 90 - 14) & n_day_whole <= (crop_harvest - 14))
+            POD = max(c(0, (POD_prev + O3_flux_dt)), na.rm=TRUE)
+        else POD = POD_prev
+      }
+      else POD = POD_prev
+    }
+    # end of POD calculation, Sadiq, Apr 2019
     
-    output = list(A_can=A_can, R_can=R_can, g_can=g_can, CUO_can=CUO_can, A_nsun=A_nsun, A_nsha=A_nsha, R_dsun=R_dsun, R_dsha=R_dsha, g_ssun=g_ssun, g_ssha=g_ssha, g_s=g_s, g_b=g_b, CUO_sun=CUO_sun, CUO_sha=CUO_sha)
+    output = list(A_can=A_can, R_can=R_can, g_can=g_can, CUO_can=CUO_can, POD=POD, O3_flux=O3_flux_ll, A_nsun=A_nsun, A_nsha=A_nsha, R_dsun=R_dsun, R_dsha=R_dsha, g_ssun=g_ssun, g_ssha=g_ssha, g_s=g_s, g_b=g_b, CUO_sun=CUO_sun, CUO_sha=CUO_sha, f_phen = f_phen, f_light = f_light, f_tds = f_tds, f_t = f_t, f_d = f_d)
     return(output)
-    
+
 }
 
 ################################################################################

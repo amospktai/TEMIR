@@ -1,0 +1,29 @@
+Mehliyar Sadiq modified this surfdata file in May 2019 for POD3 calculation
+
+Three variables are changed based on the original surfdata_1.9x2.5_mp24_simyr2000_c130419.nc file: PCT_PFT, MONTHLY_LAI and MONTHLY_SAI
+
+Mehliyar replaced pft_num from 18-25 with new pft fraction, LAI and SAI, and try to simulate completely new set of crop types:
+
+ipft = 
+18 - Maize
+19 - Maize 2
+20 - Rice
+21 - Rice 2
+22 - Wheat
+23 - Wheat.winter
+24 - Soybean
+25 - Soybean (same as 24)
+
+1, PCT_PFT = 1 (unit: percent) when Sacks harvest date is available (crop_calendar.RData)
+calculated and modified using:
+./making_surfdata/code/crop_pft_frac.R
+
+2, MONTHLY_LAI
+follows EMEP method of LAI calculation, described in Simpson et al., 2012.
+also uses Sacks plant and harvest dates: crop_calendar.RData
+calculated and modified using:
+./making_surfdata/code/make_lai.R
+
+Note: they both depend on the crop calendar data (crop_calendar.RData) I made, 
+using: ./making_surfdata/code/make_crop_calendar.R
+based on Sacks et al., 2010

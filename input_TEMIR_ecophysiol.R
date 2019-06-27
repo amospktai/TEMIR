@@ -6,7 +6,7 @@
 # Computing environment:
 
 # Use multiple cores?
-multicore_flag = FALSE
+multicore_flag = TRUE
 
 # Run in cluster environment (i.e., not on personal computer)?
 cluster_flag = FALSE
@@ -18,7 +18,7 @@ n_core = detectCores()
 
 # Debugging mode?
 # If turned on, no output data will be saved externally. Debugging mode should be run only in an R console environment (i.e., not via a UNIX command line), and is convenient for single-site simulation.
-debug_flag = TRUE
+debug_flag = FALSE
 
 ################################################################################
 ### Model configuration:
@@ -40,8 +40,8 @@ dlat = 2.0
 lat = seq(-90, 90, by=dlat)
 
 # Model run dates:
-start_date = 20090601
-end_date = 20090602
+start_date = 20100701
+end_date = 20100707
 
 # Continue from previous run?
 # If set true, temporary data within 10 days before the start date are needed.
@@ -50,7 +50,7 @@ continue_flag = FALSE
 # Specify lon/lat for a single site or a given region (including global), or specify site ID if simulation is for a FLUXNET site.
 
 # Single site or not?
-single_site_flag = TRUE
+single_site_flag = FALSE
 
 # Running FLUXNET site?
 FLUXNET_site_flag = FALSE
@@ -87,12 +87,13 @@ Phi_PSII = 0.85
 Theta_PSII = 0.70
 
 # Stomatal conductance scheme: Farquhar-Ball-Berry model ('FBB') or Medlyn model ('Medlyn')
-gs_scheme = 'FBB'
+# or DOSE ('DOSE') (have to turn on O3_POD), (Apr 2019, Sadiq), used for POD calculation
+gs_scheme = 'DOSE'
 
 # Use simplified radiative trasnfer model?
 # If not, the default model with two-stream approximation and light exctinction by both leaves and stems will be used to calculate variables "phi_sun", "phi_sha", "LAI_sun",  "LAI_sha" and "K_b", among others.
 # If so, these five variables will be replaced by values from a simplified model assuming spherical leaf orientation and extinction by leaves only, to be consistent with Zhang et al. [2003] dry deposition scheme.
-simple_radiation_flag = FALSE
+simple_radiation_flag = TRUE
 
 # Use Monin-Obukhov theory to infer temperature and humidity in canopy air?
 # If not, temperature and humidity at 2 m above displacement height will be used as proxies for temperature and humidity in canopy air.
@@ -106,7 +107,7 @@ Monin_Obukhov_flag = FALSE
 
 # Which dry deposition scheme to use (either 'Wesely', 'Zhang' or NULL)?
 # Set drydep_scheme=NULL if dry deposition computation is to be turned off.
-drydep_scheme = NULL
+drydep_scheme = 'Wesely'
 
 # Use default TEMIR aerodynamic conductance for scalars?
 # If so, the default method in "Monin_Obukhov.R" will be used.
@@ -128,6 +129,33 @@ use_TEMIR_beta_flag = FALSE
 CO2_scale_flag = TRUE
 
 ################################################################################
+
+# Calculate and output Phytotoxic Ozone Dose (POD), Apr 2019, Sadiq
+O3_POD = TRUE
+
+if (O3_POD) { # Same as ozone damage treatment
+
+   # Set ozone data directory that contains the hourly O3 nc files:
+   O3_data_dir = paste0(TEMIR_dir, 'TEMIR_inputs/O3_data/')
+
+   # Set ozone nc filename:
+   # Dimensions of ozone concentration array must be: [longitude, latitude, hours of simulation year]
+   # Thus, ozone damage can only be simulated year by year, and ozone nc file has to be specified here manually.
+   # E.g., if naming convention is "CTRL_hourlyO3_2010.nc", the following subnames should be specified as:
+   # O3_subn1 = 'CTRL_hourlyO3_'
+   # O3_subn2 = '.nc'
+   # Leaving the year out which is to be replaced by the simulation year.
+   O3_subn1 = 'CTRL_hourlyO3_'
+   O3_subn2 = '.nc'
+
+   # Set ozone array name in the nc file:
+   O3_array_name = 'houro3'
+   # Set ozone dimensions in a named vector:
+   O3_dim_vec = c(longitude = 'lon', latitude = 'lat', time = 'time')
+
+   # Please note that if the O3 file for the simulation year is not available, the model would not stop, but would look for an available year that is the closest to the simulation year.
+
+}
 
 ### Ozone damage scheme ###
 
@@ -153,10 +181,10 @@ if (!O3_damage_flag) O3_fixed_flag = TRUE
 if (O3_fixed_flag) O3_conc = 40
 
 if (O3_damage_flag & !O3_fixed_flag) {
-   
+
    # Set ozone data directory that contains the hourly O3 nc files:
    O3_data_dir = paste0(TEMIR_dir, 'TEMIR_inputs/O3_data/')
-   
+
    # Set ozone nc filename:
    # Dimensions of ozone concentration array must be: [longitude, latitude, hours of simulation year]
    # Thus, ozone damage can only be simulated year by year, and ozone nc file has to be specified here manually.
@@ -166,14 +194,14 @@ if (O3_damage_flag & !O3_fixed_flag) {
    # Leaving the year out which is to be replaced by the simulation year.
    O3_subn1 = 'CTRL_hourlyO3_'
    O3_subn2 = '.nc'
-   
+
    # Set ozone array name in the nc file:
    O3_array_name = 'houro3'
    # Set ozone dimensions in a named vector:
    O3_dim_vec = c(longitude = 'lon', latitude = 'lat', time = 'time')
-   
+
    # Please note that if the O3 file for the simulation year is not available, the model would not stop, but would look for an available year that is the closest to the simulation year.
-   
+
 }
 
 ################################################################################
@@ -186,10 +214,10 @@ if (O3_damage_flag & !O3_fixed_flag) {
 LAI_data_flag = FALSE
 
 if (LAI_data_flag) {
-   
+
    # Set monthly LAI data directory that contains the LAI nc files:
    LAI_data_dir = paste0(TEMIR_dir, 'TEMIR_inputs/LAI_data/MODIS_LAI_201707/For_Olson_2001/')
-   
+
    # LAI nc file naming convention:
    # Dimensions of LAI array must be: [longitude, latitude, months of simulation year]
    # Thus, each nc file is assumed to contain all monthly data in a given year.
@@ -199,16 +227,16 @@ if (LAI_data_flag) {
    # Leaving the year out which is to be replaced by the simulation year.
    LAI_subn1 = 'MODIS.LAIv.V5.generic.025x025.'
    LAI_subn2 = '.nc'
-   
+
    # Set LAI array name in the nc file:
    LAI_array_name = 'MODIS'
    # Set LAI dimensions in a named vector:
    LAI_dim_vec = c(longitude = 'lon', latitude = 'lat', time = 'time')
    # Time indices to extract the twelve months of data in case LAI file contains extra data in their time dimension:
    ind_LAI_time = 1:12
-   
+
    # Please note that if the LAI file for the simulation year is not available, the model would not stop, but would look for an available year that is the closest to the simulation year.
-   
+
 }
 
 ################################################################################
@@ -226,9 +254,10 @@ archive_format = 'nc'
 output_variables = c()
 
 # Recommended outputs:
-if (TRUE) output_variables = c(output_variables, 
-                               'A_can', 'R_can', 'g_can', 
+if (TRUE) output_variables = c(output_variables,
+                               'A_can', 'R_can', 'g_can',
                                # 'L_sun', 'L_sha', 'A_nsun', 'A_nsha',
+                               'POD','O3_flux', 'f_phen', 'f_light', 'f_tds', 'f_t', 'f_d',
                                'LAI_sun', 'LAI_sha', 'A_nsun', 'A_nsha',
                                'R_dsun', 'R_dsha', 'g_ssun', 'g_ssha', 'g_s',
                                'K_b', 'phi_sun', 'phi_sha',
@@ -284,6 +313,22 @@ if (O3_damage_flag) {
    )
 }
 
+# Conditional outputs, Apr 2019, Sadiq
+# Additional POD outputs:
+if (O3_POD) {
+  available_outputs_df = rbind.data.frame(
+    available_outputs_df,
+    # Canopy ozone uptake
+    c('POD', 'mmol m^-2', 'Phytotoxic ozone dose', 'PFT'),
+    c('O3_flux', 'nmol m^-2 s^-1', 'Instantaneous ozone flux', 'PFT'),
+    c('f_phen', 'fraction', 'factor for leaf age', 'PFT'),
+    c('f_light', 'fraction', 'factor for light', 'PFT'),
+    c('f_tds', 'fraction', 'factor for temperature, vapor pressure and soil moisture', 'PFT'),
+    c('f_t', 'fraction', 'factor for temperature', 'PFT'),
+    c('f_d', 'fraction', 'factor for vapor pressure', 'PFT')
+  )
+}
+
 # Additional dry deposition outputs:
 if (!is.null(drydep_scheme)) {
    available_outputs_df = rbind.data.frame(
@@ -298,7 +343,7 @@ if (!is.null(drydep_scheme)) {
       c('ra_lower_canopy','s m^-1', 'Lower canopy aerodynamic resistance','PFT'),
       c('rc_ground','s m^-1', 'Ground surface resistance','PFT')
    )
-   
+
    # Outputs for Wesely dry deposition scheme:
    if (drydep_scheme == 'Wesely') {
       available_outputs_df = rbind.data.frame(
@@ -307,7 +352,7 @@ if (!is.null(drydep_scheme)) {
          c('ra_ground','s m^-1', 'Ground aerodynamic resistance','PFT')
       )
    }
-   
+
    # Outputs for Zhang dry deposition scheme:
    if (drydep_scheme == 'Zhang') {
       available_outputs_df = rbind.data.frame(
@@ -321,7 +366,7 @@ if (!is.null(drydep_scheme)) {
          c('f_snow','0-1', 'Snow cover fraction','PFT')
       )
    }
-} 
+}
 
 ################################################################################
 ### End of input specification

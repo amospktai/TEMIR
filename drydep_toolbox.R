@@ -2,6 +2,7 @@
 # Coupled to TEMIR. R_a and g_s directly taken from TEMIR
 
 # 9/7/2018 incorporate Anthony's 6_7_2018 version
+# Apr 2019, r.s.dose, new function to compute gs following DOSE method
 
 ################################################################################
 
@@ -205,6 +206,73 @@ r.s.zhang = function(rsmin, brs, par.sun, par.sha, Lsun, Lsha, T.c, tmin, tmax,
    
 }
 
+################################################################################################################
+# DO3SE model Stomatal resistance calculation, initially implemented for POD3 calculation
+# Sadiq 2019
+################################################################################################################
+r.s.dose = function(g.max = 500, P_atm=P_atm, theta_atm=theta_atm, f.phen, T_min = 12, T_opt = 26, T_max = 40, T_v, f.min = 0.01, par_sun, par_sha, f_sun, light_alpha = 0.0105, VPD_min = 3.2, VPD_max = 1.2, vpd){
+
+  # g.max, maximum stomatal conductance for ozone, mmol O3 m-2 (PLA) s-1, follow Mills et al., 2018
+  # f.phen accounts for leaf age over the course of the growing season
+  # f.light accounts for light
+  # f.min: relative minimum stomatal conductance
+  # f.T accounts for leaf temeprature
+  # f.D accounts for vapour pressure deficit
+  # f.SW accounts for soil water availability ### NOT AVAILABLE YET ###
+  
+  # unit conversion
+  mol_to_met = 1e-3*R_uni*theta_atm/P_atm
+  g.max.met = g.max * mol_to_met
+  
+  # f.phen is pre-calculated and read in
+  f.phen = f.phen
+  
+  # f.T = function of
+  # Parameters: T_min, T_opt, T_max and f_min
+  # Inputs from simulations: T (2-meter air temperarue, in K, convert unit to degC for this function)
+  T_v_degC = T_v - 273.15
+  
+  bt = (T_max - T_opt)/(T_opt - T_min)
+  
+  # f.T calculation:
+  if (T_v_degC < T_min) f.T = f.min
+  else if (T_v_degC > T_max) f.T = f.min
+  else if (T_v_degC <= T_max & T_v_degC >= T_opt) f.T = 1
+  else{
+    bell_f1 = (T_v_degC-T_min)/(T_opt-T_min)
+    bell_f2 = (T_max-T_v_degC)/(T_max-T_opt)
+    bell_f2bt = bell_f2^bt
+    f.T = max(f.min, (bell_f1*bell_f2bt))
+  }
+  
+  # f.light = function of
+  # Parameters: light_alpha, f.min
+  # Inputs from simulations: phi_sun, phi_sha, f_sun
+  
+  f_sha = 1 - f_sun
+  f_sun_par = 1 - exp(-1 * light_alpha * par_sun)
+  f_sha_par = 1 - exp(-1 * light_alpha * par_sha)
+  f.light =  f_sun*f_sun_par + f_sha*f_sha_par 
+  
+  #f.D = function of
+  #parameters: VPD_min, VPD_max,
+  #Inputs: VPD
+  f_tmp = (1 - f.min)*(VPD_min - vpd)/(VPD_min - VPD_max) + f.min
+  f_tmp = max(f.min, f_tmp)
+  f.D = min(f_tmp, 1)
+  
+  #f.SW = function of
+  #Parameters: SWP_min, SWP_max,
+  #inputs: SWP
+  # not implemented yet
+  f.SW = 1
+  
+  # Stomatal resistance
+  f.TDS = max(f.min, f.T*f.D*f.SW)
+  r_s = 1 / (g.max.met * f.phen * f.light * f.TDS)
+  
+  return(list(r_s = r_s, f_phen = f.phen, f_light = f.light, f_tds = f.TDS, f_t = f.T,  f_d = f.D))
+}
 
 ################################################################################
 
