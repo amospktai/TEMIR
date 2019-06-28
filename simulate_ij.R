@@ -489,7 +489,7 @@ f_simulate_ij = function(IJ) {
                I_diff_sha = canopy_albedo$I_diff_sha
                # Find absorbed PAR:
                PAR_absorb = f_PAR_absorb(PAR_beam=PAR_beam, PAR_diff=PAR_diff,
-                                         LAI=LAI, SAI=LAI, K_b=K_b,
+                                         LAI=LAI, SAI=SAI, K_b=K_b,
                                          I_beam_sun=I_beam_sun,
                                          I_diff_sun=I_diff_sun,
                                          I_beam_sha=I_beam_sha,
