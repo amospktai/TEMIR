@@ -138,10 +138,12 @@ f_stomatal_cond = function(A_n, c_s=NULL, e_s=NULL, c_a=NULL, e_a=NULL, g_b=NULL
             if (C3_plant) {
                 m = 3.37*beta_t    # kPa^0.5
                 b = 100            # umol m^-2 s^-1
-            }else {
+            } else {
                 m = 1.1*beta_t      # kPa^0.5
                 b = 100             # umol m^-2 s^-1
             }
+        }
+        
         if (A_n <= 0) {
             g_s = b
         } else {
