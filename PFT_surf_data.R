@@ -507,7 +507,7 @@ if ((biogeochem_flag && get_planting_date_option == 'prescribed-map') || O3_POD)
     
     if (dlon < 0.5 || dlat < 0.5){
         # Is this necessary???? (Pang, Jun 2019)
-        warning('The default planting and harvesting data has resolution of 0.5x0.5. Simulation resoltuion is too high that there may be some problems in regridding.')
+        warning('The default planting and harvesting data has a resolution of 0.5x0.5. Simulation resoltuion is too high that there may be some problems in regridding.')
     }
     
     if (dlon == 0.5 && dlat == 0.5){
@@ -518,7 +518,7 @@ if ((biogeochem_flag && get_planting_date_option == 'prescribed-map') || O3_POD)
         prescribed_harvesting_date_Sack = ncvar_get(nc, 'harvest')
         nc_close(nc)
     } else {
-        # Like the prescribed LAI and soil data, read in the RData contains the regridded data if it exists. Otherwise, regrid the data to a suitable resolution
+        # Like the prescribed LAI and soil data, read in the RData contains the regridded data if it exists. Otherwise, regrid the nc data to a suitable resolution
         filename = paste0(planting_date_map_dir,'crop_planting_harvesting_Sack_',dlat,'x',dlon,'.RData')
         
         if (!file.exists(filename)){
@@ -567,13 +567,94 @@ if ((biogeochem_flag && get_planting_date_option == 'prescribed-map') || O3_POD)
             save(list = c('lon', 'lat', 'prescribed_planting_date_Sack', 'prescribed_harvesting_date_Sack', 'crop_name_vec'), file = filename)
             rm(tmp_plant , tmp_har, crop_name_vec, lon_Sack, lat_Sack, lon_diff, lat_diff, z)
         } else {
-            print(paste0('Crop calender with suitable resolution is already existed.'))
-            print(paste0('Loading ', file, ' ...'))
+            print(paste0('Crop calendar with a suitable resolution is already existed'), quote = FALSE)
+            print(paste0('Loading ', filename, ' ...'), quote = FALSE)
             load(filename)
         }
     }
     
 }
+
+################################################################################
+### Regrid GDDmat derived from Sack et al. (2010) crop calendar 
+################################################################################
+
+if (biogeochem_flag) {
+    if (get_GDDmat_method == 'Sack') {
+        if (dlon == 360/540 && dlat == 0.5) {
+            # The simulation resolution is the same as the input
+            filename = 'Sack_crop_calendar_GDDmat_0.667x0.5.nc'
+            nc = nc_open(paste0(Sack_GDDmat_dir, filename))
+            GDDmat_maize_map = ncvar_get(nc, 'Sack_crop_calendar_GDDmat')[,,1]
+            GDDmat_soybean_map = ncvar_get(nc, 'Sack_crop_calendar_GDDmat')[,,2]
+            GDDmat_springwheat_map = ncvar_get(nc, 'Sack_crop_calendar_GDDmat')[,,3]
+            GDDmat_winterwheat_map = ncvar_get(nc, 'Sack_crop_calendar_GDDmat')[,,4]
+            nc_close(nc)
+        } else if (dlon < 360/540 || dlat < 0.5) {
+            warning('The GDDmat map has a resolution of 0.667x0.5. Simulation resoltuion is too high that there may be some problems in regridding.')
+        } else {
+            filename = paste0('regridded_crop_GDDmat_Sack_',dlon,'x',dlat,'.RData')
+            if (!file.exists(paste0(Sack_GDDmat_dir,filename))) {
+                print('Regridding GDDmat data derived from Sack et al. (2010)')
+                # Regrid the nc input
+                nc_filename = 'Sack_crop_calendar_GDDmat_0.667x0.5.nc'
+                nc = nc_open(paste0(Sack_GDDmat_dir, nc_filename))
+                tmp_GDDmat_mean = ncvar_get(nc, 'GDDmat_mean') # dim() = 540lon x 361lat x 4crops
+                tmp_GDDmat_sd = ncvar_get(nc, 'GDDmat_sd') # this variable "may be" useful for adjusting GDDmat in a particular region (e.g., reduce the matuirty requirement by say: GDDmat = GDDmat_mean - GDDmat_sd)
+                lat_Sack = ncvar_get(nc, 'lat')
+                lon_Sack = ncvar_get(nc, 'lon')
+                nc_close(nc)
+                
+                lat_diff_sack = lat_Sack[1] - lat_Sack[2]
+                lat_diff = lat[1] - lat[2]
+                
+                lon_diff_sack = lon_Sack[1] - lon_Sack[2]
+                lon_diff = lon[1] - lon[2]
+                
+                if (lat_diff_sack * lat_diff < 0) {
+                    print('Fliping the order of lat_Sack for sp.regrid()')
+                    lat_Sack = rev(lat_Sack)
+                    tmp_GDDmat_mean[,(1:length(lat_Sack)),] = tmp_GDDmat_mean[,rev((1:length(lat_Sack))),]
+                    tmp_GDDmat_sd[,(1:length(lat_Sack)),] = tmp_GDDmat_sd[,rev((1:length(lat_Sack))),]
+                }
+                
+                if (lon_diff_sack * lon_diff < 0) {
+                    print('Fliping the order of lon_Sack for sp.regrid()')
+                    lon_Sack = rev(lon_Sack)
+                    tmp_GDDmat_mean[(1:length(lon_Sack)),,] = tmp_GDDmat_mean[rev((1:length(lon_Sack))),,]
+                    tmp_GDDmat_sd[(1:length(lon_Sack)),,] = tmp_GDDmat_sd[rev((1:length(lon_Sack))),,]
+                }
+                
+                crop_name_vec = c('maize', 'soybean', 'springwheat', 'winterwheat')
+                Sack_derived_GDDmat_mean = array(data = NA, dim = c(length(lon), length(lat), length(crop_name_vec)))
+                Sack_derived_GDDmat_sd = array(data = NA, dim = c(length(lon), length(lat), length(crop_name_vec)))
+                
+                for (z in seq(crop_name_vec)) {
+                    tmp_mean = sp.regrid(spdata = tmp_GDDmat_mean[,,z], lon.in = lon_Sack, lat.in = lat_Sack, lon.out = lon, lat.out = lat, method = 'mode')
+                    tmp_sd = sp.regrid(spdata = tmp_GDDmat_sd[,,z], lon.in = lon_Sack, lat.in = lat_Sack, lon.out = lon, lat.out = lat, method = 'mode')
+                    Sack_derived_GDDmat_mean[,,z] = tmp_mean
+                    Sack_derived_GDDmat_sd[,,z] = tmp_sd
+                    assign(x = paste0('GDDmat_',crop_name_vec[z],'_map'), value = tmp_mean)
+                    print(paste0('Finished regridding derived GDDmat for ', crop_name_vec[z]))
+                }
+                
+                save(list = c('lon', 'lat', 'Sack_derived_GDDmat_mean', 'Sack_derived_GDDmat_sd', 'crop_name_vec'), file = paste0(Sack_GDDmat_dir,filename))
+                
+                rm(z, tmp_mean, tmp_sd, lat_Sack, lon_Sack, lat_diff_sack, lon_diff_sack, tmp_GDDmat_mean, tmp_GDDmat_sd, nc_filename)
+            } else {
+                print(paste0('GDDmat map with suitable resolution is already existed'), quote = FALSE)
+                print(paste0('Loading ', filename, ' ...'), quote = FALSE)
+                load(paste0(Sack_GDDmat_dir,filename))
+                for (z in seq(crop_name_vec)) {
+                    assign(x = paste0('GDDmat_',crop_name_vec[z],'_map'), value = Sack_derived_GDDmat_mean[,,z])
+                }
+            }
+        }
+
+        
+    }
+}
+
 
 ################################################################################
 ### Rescale and interpolate PFT-level LAI and SAI data: (Yung & Tai, Feb 2019)

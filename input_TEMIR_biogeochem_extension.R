@@ -73,12 +73,18 @@ if (!any(natveg_biomass_partitioning_scheme == c('CLM4.5','custom'))){stop("'nat
 ### Planting date setting
 # Can either be 'CLM4.5', 'prescribed-map' or 'prescribed-site'
 # 'CLM4.5' (default): planting date is determined by climate (GDD) and 10-day running mean T2m
-# 'prescribed-map': read in a .nc file that contains planting date (in julain day) likes reading in other met. fields
+# 'prescribed-map': read in a .nc file that contains planting date (in julian day), by default we use the Sack planting/harvesting dataset
+#   - crop_growing_season can either be 'primary' and 'secondary'
+#   - Sack dataset has primary and secondary growing season for maize and rice
 # 'prescribed-site': enter a single plant date (in julian day), best for single site / small scale simulations with one planting date
 #####prescribed_planting_date_flag 
-get_planting_date_option = 'CLM4.5'
+get_planting_date_option = 'prescribed-map'
 if (get_planting_date_option == 'prescribed-map'){
-    planting_date_map_dir = '/Users/JackyPang/Desktop/TEMIR_run/run_dir_v1.1/TEMIR_inputs/Sack_plantingdate/'
+    planting_date_map_dir = paste0(TEMIR_dir,'TEMIR_inputs/Sack_plantingdate/')
+    if (exists('crop_growing_season')) {
+        warning("'crop_growing_season' for Sack planting dataset is declared in both 'input_TEMIR_basic_settings.R' and 'input_TEMIR_biogeochem_extension.R'\nIt is overwritten by the one decalred in input_TEMIR_biogeochem_extension.R")
+    }
+    crop_growing_season = 'primary'
 } else if (get_planting_date_option == 'prescribed-site') {
     prescribed_planting_date = 130
 } else if (get_planting_date_option == 'CLM4.5'){
@@ -92,11 +98,12 @@ if (get_planting_date_option == 'prescribed-map'){
 # 'CLM4.5': GDDmat are derived from 20-year running mean of GDD0, GDD8 and GDD10 as described in the CLM4.5 technical note. 
 # 'Sack': GDDmat are the mean GDD accumulated during a growing season from year 1995 to year 2015, growing season is the period between the planting date and harvesting date from Sack et al. (2010)
 # 'custom': enter a single GDD value (in degree C. day), best for single site / small scale simulations with one GDDmat
-get_GDDmat_method = 'CLM4.5'
+get_GDDmat_method = 'Sack'
 if (get_GDDmat_method == 'CLM4.5') {
     GDDx_map_dir = '/Users/JackyPang/Desktop/TEMIR_run/run_dir_v1.1/TEMIR_inputs/GDDx_map/'
 } else if (get_GDDmat_method == 'Sack') {
-    Sack_GDDmat_dir = '/Users/JackyPang/Desktop/TEMIR_run/run_dir_v1.1/TEMIR_inputs/Sack_GDDmat//'
+    Sack_GDDmat_dir = paste0(TEMIR_dir,'TEMIR_inputs/Sack_GDDmat/')
+    Sack_GDDmat_dir = '/Users/JackyPang/Desktop/TEMIR_run/run_dir_v1.1/TEMIR_inputs/Sack_GDDmat/'
 } else if (get_GDDmat_method == 'custom') {
     prescribed_GDD_mat = 1600
 } else {
@@ -165,7 +172,9 @@ emergence_carbon_to_leaf = 0.24
 # Additional biogeochemistry (crop module) output to RData / ncdf4, modify this if necessary
 output_variables = c(output_variables,         # output from input_basic_settings.R
                      'LAI', 'SAI', 'grainC', 'GPP', 'NPP', 
-                     'GDDT2m', 'aleaf', 'astem', 'aroot', 'arepr'
+                     'GDDT2m', 'GDDTsoil', 'aleaf', 'astem', 'aroot', 'arepr',
+                     'crop_live_flag', 'crop_plant_flag', 'leaf_emergence_flag', 'grain_fill_flag', 'harvest_flag',
+                     'day_of_planting', 'day_of_harvesting'
                      )
 
 # Additional biogeochemistry (crop module) available output

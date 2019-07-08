@@ -594,12 +594,7 @@ for (d in 1:n_day_sim) {
            GDD10_map = ncvar_get(nc,"GDD10")
            nc_close(nc)
        } else if (get_GDDmat_method == "Sack") {
-           filename = "/Users/JackyPang/Desktop/TEMIR_run/met_data/"
-           nc = nc_open(filename)
-           GDDmat_maize_map = ncvar_get(nc, "GDDmat_maize")
-           GDDmat_wheat_map = ncvar_get(nc, "GDDmat_wheat")
-           GDDmat_soybean_map = ncvar_get(nc, "GDDmat_soybean")
-           nc_close(nc)
+           # The data is read in at PFT_surf_data.R
        } else if (get_GDDmat_method == "custom") {
            print("'get_GDDmat_method' is custom, will not read in GDDx map")
        }

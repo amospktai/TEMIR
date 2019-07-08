@@ -3,7 +3,7 @@ f_crop_phenology = function(T_10_d, T_min_10_d, T_soil, T2m,
                             GDD_T2m, GDD_Tsoil, GDDmat, GDDrepr, GDDemer,
                             crop_living_flag, crop_planting_flag, leaf_emer_flag, grain_filling_flag, harvesting_flag,
                             prescribed_planting_date_readin = NULL, planting_jday, harvest_jday,
-                            GDD0_20yr = NULL, GDD8_20yr = NULL, GDD10_20yr = NULL, GDDmat_M = NULL, GDDmat_S = NULL, GDDmat_W = NULL,
+                            GDD0_20yr = NULL, GDD8_20yr = NULL, GDD10_20yr = NULL, GDDmat_M = NULL, GDDmat_S = NULL, GDDmat_SW = NULL, GDDmat_WW = NULL,
                             hybgdd, GDD_baseT, GDD_maxIncrease, max_growing_season_length, leaf_longevity, T_plant_req, T_min_plant_req, 
                             prescribed_min_plant_jday, prescribed_max_plant_jday, at_NH_flag, ipft){
   # crop phenology in CLM4.5
@@ -46,7 +46,7 @@ f_crop_phenology = function(T_10_d, T_min_10_d, T_soil, T2m,
   }
   
   # determining planting date
-  if (!crop_living_flag && !crop_planting_flag){
+  if (!crop_living_flag && !crop_planting_flag) {
     # print(paste0("Determining planting date"))
     if (any(get_planting_date_option == c('prescribed-map','prescribed-site'))){
       if (current_jday == if(is.na(prescribed_planting_date)) prescribed_planting_date_readin else prescribed_planting_date){ # using prescibed planting date
@@ -71,13 +71,14 @@ f_crop_phenology = function(T_10_d, T_min_10_d, T_soil, T2m,
     } # else (!prescribed_planting_date_flag)
     
     # determining GDDemer, GDDrepr, GDDmat
-    if (crop_living_flag){
+    if (crop_living_flag) {
       
         if (get_GDDmat_method == "custom"){
             GDDmat = prescribed_GDDmat
         } else if (get_GDDmat_method == "Sack") {
             if (ipft == 18 || ipft == 19){GDDmat = GDDmat_M}
-            if (ipft == 20 || ipft == 21){GDDmat = GDDmat_W}
+            if (ipft == 20 || ipft == 21){GDDmat = GDDmat_SW}
+            if (ipft == 22 || ipft == 23){GDDmat = GDDmat_WW}
             if (ipft == 24 || ipft == 25){GDDmat = GDDmat_S}
         } else if (get_GDDmat_method == "CLM4.5"){
             if (ipft == 18 || ipft == 19){GDDmat = max(950, min(GDD8_20yr * 0.85, hybgdd))}
