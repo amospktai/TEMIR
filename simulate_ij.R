@@ -219,7 +219,7 @@ f_simulate_ij = function(IJ) {
          theta_sat = theta_sat_PFT[i,j,ipft]
          # Clapp and Homberger parameter for bulk root zone:
          b_psi = b_psi_PFT[i,j,ipft]
-         
+
          # POD input: crop harvest date
          crop_harvest = crop_harvest_date[i,j,ipft]
          f_phen_pft = f_phen[i,j,ipft,n_day_whole]
@@ -405,7 +405,7 @@ f_simulate_ij = function(IJ) {
 
             # Cumulation of POD (Phytotoxic Ozone Dose) from previous time step (mmol m^-2):
             if (O3_POD) O3_conc = O3_hourly[i,j,(n_day_whole-1)*24+h]
-            
+
             if (!O3_POD) POD_prev = 0
             else {
                if (h == 1 & (d == 1 & !continue_flag)) POD_prev = 0
@@ -701,7 +701,7 @@ f_simulate_ij = function(IJ) {
                c('CUO_can_PFT_hist_ijd', 'canopy_photosyn$CUO_can'),
                c('POD_PFT_hist_ijd', 'canopy_photosyn$POD'), # Sadiq, Feb 2019
                c('O3_flux_PFT_hist_ijd', 'canopy_photosyn$O3_flux'),
-               c('f_phen_PFT_hist_ijd', 'canopy_photosyn$f_phen'),
+               c('f_phen_PFT_hist_ijd', 'canopy_photosyn$f_phen_pft'),
                c('f_light_PFT_hist_ijd', 'canopy_photosyn$f_light'),
                c('f_tds_PFT_hist_ijd', 'canopy_photosyn$f_tds'),
                c('f_t_PFT_hist_ijd', 'canopy_photosyn$f_t'),

@@ -935,21 +935,27 @@ f_canopy_photosyn = function(c_a, e_a, phi_sun, phi_sha, T_v=298.15, P_atm=10132
     # Sadiq, Mar 2019
     if (O3_POD) {
       if(gs_scheme == 'DOSE'){ # DOSE gs scheme
-        r.s_dose = r.s.dose(P_atm=P_atm, theta_atm=theta_atm, 
-                            f.phen = f_phen_pft, T_v = T_v, 
-                            par_sun = phi_sun, par_sha = phi_sha, 
+        r.s_dose = r.s.dose(P_atm=P_atm, theta_atm=theta_atm,
+                            f.phen = f_phen_pft, T_v = T_v,
+                            par_sun = phi_sun, par_sha = phi_sha,
                             f_sun = LAI_sun/LAI, vpd = vpd)
         r_s = r.s_dose$r_s
-        f_phen = r.s_dose$f_phen
+        f_phen_pft = r.s_dose$f_phen
         f_light = r.s_dose$f_light
         f_tds = r.s_dose$f_tds
         f_t = r.s_dose$f_t
         f_d = r.s_dose$f_d
-        
+
         g_s = 1/r_s
       }
+      else{
+        f_light = 1
+        f_tds = 1
+        f_t = 1
+        f_d = 1
+      }
       # compute leaf-level instantanous ozone flux
-      O3_flux = f_ozone_flux(O3_conc=O3_conc, g_s=g_s, g_b=g_b, 
+      O3_flux = f_ozone_flux(O3_conc=O3_conc, g_s=g_s, g_b=g_b,
                              g_ah=g_ah, P_atm=P_atm, theta_atm=theta_atm)
       O3_flux_ll = O3_flux$O3_flux_ll # leaf-level ozone flux
       O3_flux_th = 3                  # threshold: 3 nmol m^-2 s^-1
@@ -958,7 +964,7 @@ f_canopy_photosyn = function(c_a, e_a, phi_sun, phi_sha, T_v=298.15, P_atm=10132
       dt = 3600
       # Ozone flux per time step (mmol m^-2):
       O3_flux_dt = O3_flux_crit*1e-6*dt
-      
+
       # accumulation of POD following crop calendar data (crop_harvest_date) [Sacks et al., 2010]
       if(!is.na(crop_harvest)){
         if(n_day_whole > (crop_harvest - 90 - 14) & n_day_whole <= (crop_harvest - 14))
@@ -968,8 +974,8 @@ f_canopy_photosyn = function(c_a, e_a, phi_sun, phi_sha, T_v=298.15, P_atm=10132
       else POD = POD_prev
     }
     # end of POD calculation, Sadiq, Apr 2019
-    
-    output = list(A_can=A_can, R_can=R_can, g_can=g_can, CUO_can=CUO_can, POD=POD, O3_flux=O3_flux_ll, A_nsun=A_nsun, A_nsha=A_nsha, R_dsun=R_dsun, R_dsha=R_dsha, g_ssun=g_ssun, g_ssha=g_ssha, g_s=g_s, g_b=g_b, CUO_sun=CUO_sun, CUO_sha=CUO_sha, f_phen = f_phen, f_light = f_light, f_tds = f_tds, f_t = f_t, f_d = f_d)
+
+    output = list(A_can=A_can, R_can=R_can, g_can=g_can, CUO_can=CUO_can, POD=POD, O3_flux=O3_flux_ll, A_nsun=A_nsun, A_nsha=A_nsha, R_dsun=R_dsun, R_dsha=R_dsha, g_ssun=g_ssun, g_ssha=g_ssha, g_s=g_s, g_b=g_b, CUO_sun=CUO_sun, CUO_sha=CUO_sha, f_phen_pft = f_phen_pft, f_light = f_light, f_tds = f_tds, f_t = f_t, f_d = f_d)
     return(output)
 
 }
