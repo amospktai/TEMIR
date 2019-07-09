@@ -4,7 +4,7 @@ f_crop_phenology = function(T_10_d, T_min_10_d, T_soil, T2m,
                             crop_living_flag, crop_planting_flag, leaf_emer_flag, grain_filling_flag, harvesting_flag,
                             prescribed_planting_date_readin = NULL, planting_jday, harvest_jday,
                             GDD0_20yr = NULL, GDD8_20yr = NULL, GDD10_20yr = NULL, GDDmat_M = NULL, GDDmat_S = NULL, GDDmat_SW = NULL, GDDmat_WW = NULL,
-                            hybgdd, GDD_baseT, GDD_maxIncrease, max_growing_season_length, leaf_longevity, T_plant_req, T_min_plant_req, 
+                            hybgdd, GDD_baseT, GDD_maxIncrease, max_growing_season_length, leaf_longevity, T_plant_req, T_min_plant_req, repr_GDDfrac, emer_GDDfrac,
                             prescribed_min_plant_jday, prescribed_max_plant_jday, at_NH_flag, ipft){
   # crop phenology in CLM4.5
   # 1. determining planting date based on climate (GDDx20) and weather, it can be prescribed
@@ -89,22 +89,20 @@ f_crop_phenology = function(T_10_d, T_min_10_d, T_soil, T2m,
         if (get_GDDrepr_method == "custom") {
             GDDrepr = prescribed_GDD_repr
         } else if (get_GDDrepr_method == "CLM4.5") {
-            if (ipft == 18 || ipft == 19){
+            if (ipft == 18 || ipft == 19) {
                 maize_maturity_rating = max(73, min(135, (GDDmat + 53.683)/13.882))          # details of this formula can be found in Kucharik (2003), Earth Interactions No.7
                 GDD_repr_factor = -0.002 * (maize_maturity_rating - 73) + 0.65
                 GDD_repr_factor = min(max(GDD_repr_factor, 0.55), 0.65)
-                GDDrepr = GDDmat * GDD_repr_factor
+                GDDrepr = GDD_repr_factor * GDDmat
+            } else {
+                GDDrepr = repr_GDDfrac * GDDmat
             }
-            if (ipft == 20 || ipft == 21){GDDrepr = 0.6 * GDDmat}
-            if (ipft == 24 || ipft == 25){GDDrepr = 0.7 * GDDmat}
         }
         
         if (get_GDDemer_method == "custom") {
             GDDemer = prescribed_GDD_emer
-        } else if (get_GDDrepr_method == "CLM4.5") {
-            if (ipft == 18 || ipft == 19){GDDemer = 0.03 * GDDmat}
-            if (ipft == 20 || ipft == 21){GDDemer = 0.05 * GDDmat}
-            if (ipft == 24 || ipft == 25){GDDemer = 0.03 * GDDmat}
+        } else if (get_GDDemer_method == "CLM4.5") {
+            GDDemer = emer_GDDfrac * GDDmat
         }
     
       # Checking the value of GDDmat, GDDrepr, GDDemer

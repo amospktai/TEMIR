@@ -120,47 +120,6 @@ f_simulate_ij = function(IJ) {
    alpha_soil_dry = soil_albedo[i,j,1]
    alpha_soil_sat = soil_albedo[i,j,3]
    
-   # [Crop model] read in site and PFT planting date (POD or BGC), harvesting date (POD only) and GDDmat (BGC only)
-   if (biogeochem_flag || O3_POD) {
-       if (O3_POD || (biogeochem_flag && get_planting_date_option == 'prescribed-map')) {
-           # crop name in the Sack data set
-           # maize (primary growing season), soybean, wheat, winter wheat, rice (primary growing season), rice (secondary growing season), maize (secondary growing season)
-           if (any(ipft == c(18,19))) {
-               if (crop_growing_season == 'primary') {
-                   prescribed_planting_date = prescribed_planting_date_Sack[i,j,1]
-               } else if (crop_growing_season == 'secondary') {
-                   prescribed_planting_date = prescribed_planting_date_Sack[i,j,7]
-               }
-           } else if (any(ipft == c(20,21))) {
-               prescribed_planting_date = prescribed_planting_date_Sack[i,j,3]
-           } else if (any(ipft == c(22,23))) {
-               prescribed_planting_date = prescribed_planting_date_Sack[i,j,4]
-           } else if (any(ipft == c(24,25))) {
-               prescribed_planting_date = prescribed_planting_date_Sack[i,j,2]
-           } else {
-               prescribed_planting_date = NA
-           }
-       }
-       
-       if (O3_POD && !biogeochem_flag) {
-           # read in harvesting date only
-           # ... = prescribed_harvesting_date_Sack[i,j,x]
-       }
-       
-       if (!O3_POD && biogeochem_flag) {
-           # read in GDDmat
-           if (get_GDDmat_method == 'CLM4.5') {
-               GDD0 = GDD0_map[i,j]
-               GDD8 = GDD8_map[i,j]
-               GDD10 = GDD10_map[i,j]
-           } else if (get_GDDmat_method == 'Sack') {
-               GDDmat_maize = GDDmat_maize_map[i,j]
-               GDDmat_wheat = GDDmat_wheat_map[i,j]
-               GDDmat_soybean = GDDmat_soybean_map[i,j]
-           }
-       }
-   }
-   
    # Other model parameters:
    met_cond_flag = TRUE
    colimit_flag = TRUE
@@ -269,6 +228,11 @@ f_simulate_ij = function(IJ) {
          tau_stem = tausvis[ipft]
          
          if (biogeochem_flag) {
+             
+             # Flags for differentiating the parameters for crops planting season and phenology
+             at_NH_flag = ifelse(test = lat[j] >= 0, yes = TRUE, no = FALSE)
+             at_tropical_flag = ifelse(test = lat[j] < 30 & lat[j] > -30, yes = TRUE, no = FALSE)
+
              # Note:
              # C3 unmanaged rainfed/irrigated crops (ipft == 16:17) are belong to both stress deciduous and crop PFT, but the phenology is based on stress deciduous PFT 
              
@@ -285,7 +249,8 @@ f_simulate_ij = function(IJ) {
              a_root_initial = arooti[ipft]
              a_root_final = arootf[ipft]
              # Base temperature og GDD accumulation for crops
-             GDD_base_T = baset[ipft]
+             # Tropical maize/soybean: GDD_base_T = 10; 'Tropical' wheat: GDD_base_T = 12 - 0.4 * abs(lat)
+             GDD_base_T = baset[ipft]; if (at_tropical_flag && any(ipft == c(18,19,24,25))) {GDD_base_T = 10}; if (at_tropical_flag && any(ipft == c(20,21))) {GDD_base_T = 12 - 0.4*abs(lat[j])}
              # Allocation ratio of coarse root : live stem
              allocRatio_croot.stem = croot_stem[ipft]
              # Crop (0 = non-crop; 1 = crop):
@@ -311,27 +276,28 @@ f_simulate_ij = function(IJ) {
              # C:N ratio of grain
              grain_cn = graincn[ipft]
              # % of GDD_mat to reach reproductive stage
-             repr_GDDpercent = grnfill[ipft]
+             # Note that this parameters for temperate soybean is changed from 0.7 in CLM4.5 to 0.5 in CLM5 according to the technical note. Here we adopt the CLM5 paramter
+             repr_GDDfraction = grnfill[ipft]; if (at_tropical_flag && any(ipft == c(18,19,24,25))) {repr_GDDfraction = 0.5}
              # Maximum GDD_mat allowed for crops
-             GDDmat_max = hybgdd[ipft]
+             GDDmat_max = hybgdd[ipft]; if (at_tropical_flag && any(ipft == c(24,25))) {GDDmat_max = 2100}
              # Prescribed maximum LAI allowed for crops
              LAI_max = laimx[ipft]
              # C:N ratio of leaf
              leaf_cn = leafcn[ipft]
              # % of GDD_mat to reach vegetative stage
-             emer_GDDpercent = lfemerg[ipft]
+             emer_GDDfraction = lfemerg[ipft]
              # C:N ratio of leaf litter
              leafLitter_cn = lflitcn[ipft]
              # C:N ratio of live wood
              liveWood_cn = livewdcn[ipft]
              # Daily min planting temperature requirment (K)
-             min_T_planting_req = min_planting_temp[ipft]
+             min_T_planting_req = min_planting_temp[ipft]; if (at_tropical_flag && any(ipft == c(18,19,24,25))) {min_T_planting_req = 283.15}
              # Maximum growing season length allowed
-             crop_season_length_max = mxmat[ipft]
+             crop_season_length_max = mxmat[ipft]; if (at_tropical_flag && any(ipft == c(18,19))) {crop_season_length_max = 160}
              # Maximum increase in GDD_T2m allowed
              GDDT2m_change_max = mxtmp[ipft]
              # Daily average planting temperature requirement (K)
-             avg_T_planting_req = planting_temp[ipft]
+             avg_T_planting_req = planting_temp[ipft]; if (at_tropical_flag && any(ipft == c(18,19,24,25))) {avg_T_planting_req = 294.15}
              # CLM rooting distribution parameter a and b and the root fraction
              root_a_par = roota_par[ipft]
              root_b_par = roota_par[ipft]
@@ -348,12 +314,57 @@ f_simulate_ij = function(IJ) {
              # Woody life form (0 = non-woody; 1 = woody):
              woody_flag = (woody[ipft] == 1)
              # Maximum canopy height for crops:
-             ztopmax = ztopmx[ipft]
+             ztopmax = ztopmx[ipft]; if (at_tropical_flag && any(ipft == c(24,25))) {ztopmax = 1}
              # CLM4.5 planting period for crops
-             earliest_planting_doy_NH = earliest_planting_jday_possible_NH[ipft]
-             latest_planting_doy_NH = latest_planting_jday_possible_NH[ipft]
-             earliest_planting_doy_SH = earliest_planting_jday_possible_SH[ipft]
-             latest_planting_doy_SH = latest_planting_jday_possible_SH[ipft]
+             # Not sure if the phenology in the SH tropical region in CLM5 is also 6 month later than the NH counterpart. Here we assume yes at the time being.
+             earliest_planting_doy_NH = earliest_planting_jday_possible_NH[ipft]; if (at_tropical_flag) {if (any(ipft == c(18,19))) {earliest_planting_doy_NH = 79} else if (any(ipft == c(24,25))) {earliest_planting_doy_NH = 105}}
+             latest_planting_doy_NH = latest_planting_jday_possible_NH[ipft]; if (at_tropical_flag) {if (any(ipft == c(18,19))) {latest_planting_doy_NH = 105} else if (any(ipft == c(24,25))) {latest_planting_doy_NH = 181}}
+             earliest_planting_doy_SH = earliest_planting_jday_possible_SH[ipft]; if (at_tropical_flag) {if (any(ipft == c(18,19))) {earliest_planting_doy_SH = 263} else if (any(ipft == c(24,25))) {earliest_planting_doy_SH = 288}}
+             latest_planting_doy_SH = latest_planting_jday_possible_SH[ipft]; if (at_tropical_flag) {if (any(ipft == c(18,19))) {latest_planting_doy_SH = 288} else if (any(ipft == c(24,25))) {latest_planting_doy_SH = 365}}
+         }
+         
+         # [Crop model] read in site and PFT planting date (POD or BGC), harvesting date (POD only) and GDDmat (BGC only)
+         if (biogeochem_flag || O3_POD) {
+             if (O3_POD || (biogeochem_flag && get_planting_date_option == 'prescribed-map')) {
+                 # crop name in the Sack data set
+                 # maize (primary growing season), soybean, wheat, winter wheat, rice (primary growing season), rice (secondary growing season), maize (secondary growing season)
+                 # The regridded numbers may have decimal, round them to the nearest whole number (Pang, Jun 2019)
+                 if (any(ipft == c(18,19))) {
+                     if (crop_growing_season == 'primary') {
+                         prescribed_planting_date = round(prescribed_planting_date_Sack[i,j,1], digits = 0)
+                         print(paste0('[Sack planting date] = ', prescribed_planting_date))
+                     } else if (crop_growing_season == 'secondary') {
+                         prescribed_planting_date = round(prescribed_planting_date_Sack[i,j,7], digits = 0)
+                     } else {stop("'crop_growing_season' for Sack dataset is not correctly specified")}
+                 } else if (any(ipft == c(20,21))) {
+                     prescribed_planting_date = round(prescribed_planting_date_Sack[i,j,3], digits = 0)
+                 } else if (any(ipft == c(22,23))) {
+                     prescribed_planting_date = round(prescribed_planting_date_Sack[i,j,4], digits = 0)
+                 } else if (any(ipft == c(24,25))) {
+                     prescribed_planting_date = round(prescribed_planting_date_Sack[i,j,2], digits = 0)
+                 } else {
+                     prescribed_planting_date = NA
+                 }
+             }
+             
+             if (O3_POD && !biogeochem_flag) {
+                 # read in harvesting date only
+                 # ... = prescribed_harvesting_date_Sack[i,j,x]
+             }
+             
+             if (!O3_POD && biogeochem_flag) {
+                 # read in GDDmat
+                 if (get_GDDmat_method == 'CLM4.5') {
+                     GDD0 = GDD0_map[i,j]
+                     GDD8 = GDD8_map[i,j]
+                     GDD10 = GDD10_map[i,j]
+                 } else if (get_GDDmat_method == 'Sack') {
+                     GDDmat_maize = GDDmat_maize_map[i,j]
+                     GDDmat_springwheat = GDDmat_springwheat_map[i,j]
+                     GDDmat_winterwheat = GDDmat_winterwheat_map[i,j]
+                     GDDmat_soybean = GDDmat_soybean_map[i,j]
+                 }
+             }
          }
          
          # Soil parameters:
@@ -773,6 +784,10 @@ f_simulate_ij = function(IJ) {
             beta_t = f_water_stress(soil_wetness=soil_wetness_root, 
                                     psi_sat=psi_sat, b_psi=b_psi, 
                                     psi_c=psi_c, psi_o=psi_o)
+            
+            # beta_t of irrigated crops are set to be one
+            beta_t = ifelse(any(ipft == c(19,21,23,25)), yes = 1, no = beta_t)
+            
             # Find canopy photosynthesis:
             canopy_photosyn = f_canopy_photosyn(c_a=c_a, e_a=e_a, 
                                                 phi_sun=phi_sun, 
@@ -971,7 +986,6 @@ f_simulate_ij = function(IJ) {
                         # prescribed_planting_date_readin are required if get_planting_date_option == 'prescribed-map' or 'prescribed-site'
                         # GDDx_20yr are required if get_GDDmat_method == 'CLM4.5'
                         # GDDmat_M/S/W are requried if get_GDDmat_method == 'Sack'
-                        at_NH_flag = ifelse(test = lat[j] >= 0, yes = TRUE, no = FALSE)
                         
                         crop_phenology = f_crop_phenology(T_10_d = T_10d, T_min_10_d = Tmin_10d, T_soil = T_soil1, T2m = T_2m,
                                                           leafC = leaf_C, livestemC = livestem_C, finerootC = fineroot_C, grainC = grain_C, LAI = LAI, SAI = SAI,
@@ -979,8 +993,8 @@ f_simulate_ij = function(IJ) {
                                                           crop_living_flag = crop_live_flag, crop_planting_flag = crop_plant_flag, leaf_emer_flag = leaf_emergence_flag, grain_filling_flag = grain_fill_flag, harvesting_flag = harvest_flag,
                                                           prescribed_planting_date_readin = if (get_planting_date_option != 'CLM4.5') {prescribed_planting_date} else {NULL}, planting_jday = day_of_planting, harvest_jday = day_of_harvest,
                                                           GDD0_20yr = ifelse(exists("GDD0"), yes = GDD0, no = NULL), GDD8_20yr = ifelse(exists("GDD8"), yes = GDD8, no = 10), GDD10_20yr = ifelse(exists("GDD10"), yes = GDD10, no = NULL),
-                                                          GDDmat_M = ifelse(exists("GDDmat_maize"), yes = GDDmat_maize, no = NULL), GDDmat_S = ifelse(exists("GDDmat_soybean"), yes = GDDmat_soybean, no = NULL), GDDmat_W = ifelse(exists("GDDmat_wheat"), yes = GDDmat_wheat, no = NULL),
-                                                          hybgdd = GDDmat_max, GDD_baseT = GDD_base_T, GDD_maxIncrease = GDDT2m_change_max, max_growing_season_length = crop_season_length_max, leaf_longevity = leaflong, T_plant_req = avg_T_planting_req, T_min_plant_req = min_T_planting_req,
+                                                          GDDmat_M = ifelse(exists("GDDmat_maize"), yes = GDDmat_maize, no = NULL), GDDmat_S = ifelse(exists("GDDmat_soybean"), yes = GDDmat_soybean, no = NULL), GDDmat_SW = ifelse(exists("GDDmat_springwheat"), yes = GDDmat_wheat, no = NULL), GDDmat_WW = ifelse(exists("GDDmat_winterwheat"), yes = GDDmat_winterwheat, no = NULL),
+                                                          hybgdd = GDDmat_max, GDD_baseT = GDD_base_T, GDD_maxIncrease = GDDT2m_change_max, max_growing_season_length = crop_season_length_max, leaf_longevity = leaflong, T_plant_req = avg_T_planting_req, T_min_plant_req = min_T_planting_req, repr_GDDfrac = repr_GDDfraction, emer_GDDfrac = emer_GDDfraction,
                                                           prescribed_min_plant_jday = ifelse(test = at_NH_flag, yes = earliest_planting_doy_NH, no = earliest_planting_doy_SH), prescribed_max_plant_jday = ifelse(test = at_NH_flag, yes = latest_planting_doy_NH, no = latest_planting_doy_SH),
                                                           at_NH_flag = at_NH_flag, ipft = ipft)
                         
@@ -1006,7 +1020,7 @@ f_simulate_ij = function(IJ) {
                         crop_allocation_fluxes = f_crop_allocation_fluxes(A_can_umolm2s1 = dailyMean_An, mr_total = dailyMean_mr, gr_fraction = 0.3, 
                                                                           GDDmat = GDD_mat, GDD_T2m = GDDT2m, GDD_Tsoil = GDDTsoil, GDDemer = GDD_emer, GDDrepr = GDD_repr, crop_living_flag = crop_live_flag, peak_lai_flag = peak_LAI_flag, grain_filling_flag = grain_fill_flag,
                                                                           astem_leafem = a_stem_leafem, aleaf_leafem = a_leaf_leafem, aleaf = a_leaf, astem = a_stem,
-                                                                          bfact = b_factor, arooti = a_root_initial, arootf = a_root_final, astemf = a_stem_final, declfact = GDD_decline_factor, allconss = a_stem_alloc_power, aleaff = a_leaf_final, allconsl = a_leaf_alloc_power, lfemerg = emer_GDDpercent, fleafi = a_leaf_base)
+                                                                          bfact = b_factor, arooti = a_root_initial, arootf = a_root_final, astemf = a_stem_final, declfact = GDD_decline_factor, allconss = a_stem_alloc_power, aleaff = a_leaf_final, allconsl = a_leaf_alloc_power, lfemerg = emer_GDDfraction, fleafi = a_leaf_base)
                         simulateIJ_crop_allocation_variable_name = c("leaf_C_alloc_flux","fineroot_C_alloc_flux","livestem_C_alloc_flux","deadstem_C_alloc_flux","livecoarseroot_C_alloc_flux","deadcoarseroot_C_alloc_flux","grain_C_alloc_flux",
                                                                      "a_stem","a_leaf","a_root","a_repr","a_stem_leafem","a_leaf_leafem")
                         f_crop_allocation_output_listvariable_name = c("leaf_carbon_partitioning_flux_gCm2s1","fineroot_carbon_partitioning_flux_gCm2s1","livestem_carbon_partitioning_flux_gCm2s1","deadstem_carbon_partitioning_flux_gCm2s1","livecoarseroot_carbon_partitioning_flux_gCm2s1","deadcoarseroot_carbon_partitioning_flux_gCm2s1","grain_carbon_partitioning_flux_gCm2s1",

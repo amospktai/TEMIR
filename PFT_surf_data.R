@@ -188,7 +188,7 @@ g1_med_table = c(NA, 2.35, 2.35, 2.35, 4.12, 4.12, 4.45, 4.45, 4.45, 4.7, 4.7, 4
 
 print('Loading surface data...', quote=FALSE)
 
-filename = paste0(surf_data_dir, 'surfdata_map/surfdata_1.9x2.5_mp24_simyr2000_c130419.nc')
+filename = paste0(surf_data_dir, 'surfdata_map/surfdata_1.9x2.5_mp24_simyr2000_c130419_CLM5coverage.nc')
 
 nc = nc_open(filename)
 # Dimensions:
