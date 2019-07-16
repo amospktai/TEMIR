@@ -178,67 +178,65 @@ output_variables = c(output_variables,         # output from input_basic_setting
                      )
 
 # Additional biogeochemistry (crop module) available output
-if (biogeochem_flag) {
-    available_outputs_df = rbind.data.frame(
-        available_outputs_df,
-        # Physiology variables
-        c('LAI', 'm^2 m^-2', 'Total leaf area index', 'PFT_daily'),
-        c('SAI', 'm^2 m^-2', 'Total stem area index', 'PFT_daily'),
-        c('htop', 'm', 'Canopy height', 'PFT_daily'),
-        c('hbot', 'm', 'Canopy bottom', 'PFT_daily'),
-        # Plant carbon pools
-        c('leafC', 'gC m^-2', 'Leaf carbon stock', 'PFT_daily'),
-        c('finerootC', 'gC m^-2', 'Fine root carbon stock', 'PFT_daily'),
-        c('livestemC', 'gC m^-2', 'Live stem carbon stock', 'PFT_daily'),
-        c('deadstemC', 'gC m^-2', 'Dead stem carbon stock', 'PFT_daily'),
-        c('livecoraserootC', 'gC m^-2', 'Live coarse root carbon stock', 'PFT_daily'),
-        c('deadcoraserootC', 'gC m^-2', 'Dead coarse root carbon stock', 'PFT_daily'),
-        c('grainC', 'gC m^-2', 'Grain carbon stock (crop dry yield)', 'PFT_daily'),
-        # GPP, NPP, biomass partitioning fluxes and respirations
-        c('GPP', 'gC m^-2 s^-1', 'Daily mean GPP', 'PFT_daily'),
-        c('NPP', 'gC m^-2 s^-1', 'Daily mean NPP (GPP - growth resp. - main. resp.)', 'PFT_daily'),
-        c('leafC_alloc', 'gC m^-2 s^-1', 'Biomass partitioning rate to leafC', 'PFT_daily'),
-        c('finerootC_alloc', 'gC m^-2 s^-1', 'Biomass partitioning rate to finerootC', 'PFT_daily'),
-        c('livestemC_alloc', 'gC m^-2 s^-1', 'Biomass partitioning rate to livestemC', 'PFT_daily'),
-        c('deadstemC_alloc', 'gC m^-2 s^-1', 'Biomass partitioning rate to deadstemC', 'PFT_daily'),
-        c('livecoraserootC_alloc', 'gC m^-2 s^-1', 'Biomass partitioning rate to livecoraserootC', 'PFT_daily'),
-        c('deadcoraserootC_alloc', 'gC m^-2 s^-1', 'Biomass partitioning rate to deadcoraserootC', 'PFT_daily'),
-        c('grainC_alloc', 'gC m^-2 s^-1', 'Biomass partitioning rate to grainC', 'PFT_daily'),
-        c('mr_leaf', 'gC m^-2 s^-1', 'Leaf maintenance respiration', 'PFT'),
-        c('mr_fineroot', 'gC m^-2 s^-1', 'Fine root maintenance respiration', 'PFT'),
-        c('mr_livestem', 'gC m^-2 s^-1', 'Live stem maintenance respiration', 'PFT'),
-        c('mr_livecoraseroot', 'gC m^-2 s^-1', 'Live corase root maintenance respiration', 'PFT'),
-        c('mr_grain', 'gC m^-2 s^-1', 'Grain maintenance respiration', 'PFT'),
-        c('mr_total', 'gC m^-2 s^-1', 'Total maintenance respiration', 'PFT'),
-        # Crop phenology
-        c('GDDT2m', 'Degree day', 'Growing degree day of T2m', 'PFT_daily'),
-        c('GDDTsoil', 'Degree day', 'Growing degree day of Tsoil', 'PFT_daily'),
-        c('GDDmat' , 'Degree day', 'Growing degree day requirement to reach crop maturity', 'PFT_daily'),
-        c('GDDDrepr', 'Degree day', 'Growing degree day requirement to reach grain fill (reproductive stage)', 'PFT_daily'),
-        c('GDDemer', 'Degree day', 'Growing degree day requirement to reach leaf emergence (vegetative stage)', 'PFT_daily'),
-        c('crop_live_flag', '', 'Flag determines whether crop is live', 'PFT_daily'),
-        c('crop_plant_flag', '', 'Flag determines whether crop is planted already', 'PFT_daily'),
-        c('leaf_emergence_flag', '', 'Flag determines whether crop is in the vegetaive stage', 'PFT_daily'),
-        c('grain_fill_flag', '', 'Flag determines whether crop is in the reproductive stage', 'PFT_daily'),
-        c('harvest_flag', '', 'Flag determines whether crop is harvested', 'PFT_daily'),
-        c('day_of_planting', 'Julian day', 'Crop planting day', 'PFT_daily'),
-        c('day_of_harvesting', 'Julian day', 'Crop harvesting day', 'PFT_daily'),
-        # Allocation coefficients
-        c('aleaf','','Biomass allocation fraction to leaf', 'PFT_daily'),
-        c('aleaf_leafem', '', 'aleaf during the vegetative stage', 'PFT_daily'),
-        c('astem','','Biomass allocation fraction to livestem', 'PFT_daily'),
-        c('astem_leafem', '', 'astem during the vegetative stage', 'PFT_daily'),
-        c('aroot','','Biomass allocation fraction to fine root', 'PFT_daily'),
-        c('arepr','','Biomass allocation fraction to grain (reproductive)', 'PFT_daily')
-        
-        
-    )
-}
+available_outputs_df = rbind.data.frame(
+    available_outputs_df,
+    # Physiology variables
+    c('LAI', 'm^2 m^-2', 'Total leaf area index', 'PFT_daily'),
+    c('SAI', 'm^2 m^-2', 'Total stem area index', 'PFT_daily'),
+    c('htop', 'm', 'Canopy height', 'PFT_daily'),
+    c('hbot', 'm', 'Canopy bottom', 'PFT_daily'),
+    # Plant carbon pools
+    c('leafC', 'gC m^-2', 'Leaf carbon stock', 'PFT_daily'),
+    c('finerootC', 'gC m^-2', 'Fine root carbon stock', 'PFT_daily'),
+    c('livestemC', 'gC m^-2', 'Live stem carbon stock', 'PFT_daily'),
+    c('deadstemC', 'gC m^-2', 'Dead stem carbon stock', 'PFT_daily'),
+    c('livecoraserootC', 'gC m^-2', 'Live coarse root carbon stock', 'PFT_daily'),
+    c('deadcoraserootC', 'gC m^-2', 'Dead coarse root carbon stock', 'PFT_daily'),
+    c('grainC', 'gC m^-2', 'Grain carbon stock (crop dry yield)', 'PFT_daily'),
+    # GPP, NPP, biomass partitioning fluxes and respirations
+    c('GPP', 'gC m^-2 s^-1', 'Daily mean GPP', 'PFT_daily'),
+    c('NPP', 'gC m^-2 s^-1', 'Daily mean NPP (GPP - growth resp. - main. resp.)', 'PFT_daily'),
+    c('leafC_alloc', 'gC m^-2 s^-1', 'Biomass partitioning rate to leafC', 'PFT_daily'),
+    c('finerootC_alloc', 'gC m^-2 s^-1', 'Biomass partitioning rate to finerootC', 'PFT_daily'),
+    c('livestemC_alloc', 'gC m^-2 s^-1', 'Biomass partitioning rate to livestemC', 'PFT_daily'),
+    c('deadstemC_alloc', 'gC m^-2 s^-1', 'Biomass partitioning rate to deadstemC', 'PFT_daily'),
+    c('livecoraserootC_alloc', 'gC m^-2 s^-1', 'Biomass partitioning rate to livecoraserootC', 'PFT_daily'),
+    c('deadcoraserootC_alloc', 'gC m^-2 s^-1', 'Biomass partitioning rate to deadcoraserootC', 'PFT_daily'),
+    c('grainC_alloc', 'gC m^-2 s^-1', 'Biomass partitioning rate to grainC', 'PFT_daily'),
+    c('mr_leaf', 'gC m^-2 s^-1', 'Leaf maintenance respiration', 'PFT'),
+    c('mr_fineroot', 'gC m^-2 s^-1', 'Fine root maintenance respiration', 'PFT'),
+    c('mr_livestem', 'gC m^-2 s^-1', 'Live stem maintenance respiration', 'PFT'),
+    c('mr_livecoraseroot', 'gC m^-2 s^-1', 'Live corase root maintenance respiration', 'PFT'),
+    c('mr_grain', 'gC m^-2 s^-1', 'Grain maintenance respiration', 'PFT'),
+    c('mr_total', 'gC m^-2 s^-1', 'Total maintenance respiration', 'PFT'),
+    # Crop phenology
+    c('GDDT2m', 'Degree day', 'Growing degree day of T2m', 'PFT_daily'),
+    c('GDDTsoil', 'Degree day', 'Growing degree day of Tsoil', 'PFT_daily'),
+    c('GDDmat' , 'Degree day', 'Growing degree day requirement to reach crop maturity', 'PFT_daily'),
+    c('GDDDrepr', 'Degree day', 'Growing degree day requirement to reach grain fill (reproductive stage)', 'PFT_daily'),
+    c('GDDemer', 'Degree day', 'Growing degree day requirement to reach leaf emergence (vegetative stage)', 'PFT_daily'),
+    c('crop_live_flag', '', 'Flag determines whether crop is live', 'PFT_daily'),
+    c('crop_plant_flag', '', 'Flag determines whether crop is planted already', 'PFT_daily'),
+    c('leaf_emergence_flag', '', 'Flag determines whether crop is in the vegetaive stage', 'PFT_daily'),
+    c('grain_fill_flag', '', 'Flag determines whether crop is in the reproductive stage', 'PFT_daily'),
+    c('harvest_flag', '', 'Flag determines whether crop is harvested', 'PFT_daily'),
+    c('day_of_planting', 'Julian day', 'Crop planting day', 'PFT_daily'),
+    c('day_of_harvesting', 'Julian day', 'Crop harvesting day', 'PFT_daily'),
+    # Allocation coefficients
+    c('aleaf','','Biomass allocation fraction to leaf', 'PFT_daily'),
+    c('aleaf_leafem', '', 'aleaf during the vegetative stage', 'PFT_daily'),
+    c('astem','','Biomass allocation fraction to livestem', 'PFT_daily'),
+    c('astem_leafem', '', 'astem during the vegetative stage', 'PFT_daily'),
+    c('aroot','','Biomass allocation fraction to fine root', 'PFT_daily'),
+    c('arepr','','Biomass allocation fraction to grain (reproductive)', 'PFT_daily')
+)
+
 
 # End of input_TEMIR_biogeochem_extension.R
 ################################################################################
-
 # Declaring missing flags and values, do not modify this part
+biogeochem_flag = TRUE
+
 if (!exists("planting_date_map_dir")){planting_date_map_dir = NA}
 if (!exists("prescribed_planting_date")){prescribed_planting_date = NA}
 if (!exists("GDDx_map_dir")){GDDx_map_dir = NA}

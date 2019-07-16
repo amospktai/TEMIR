@@ -159,6 +159,18 @@ CO2_scale_flag = TRUE
 
 ################################################################################
 
+### POD3 simulation ###
+
+O3_POD = FALSE
+
+if (O3_POD) {
+    # primary or secondary growing season used in Sack planting date/ harvesting date dataset
+    # only applied for maize and rice
+    crop_growing_season = 'primary'
+}
+
+################################################################################
+
 ### Ozone damage scheme ###
 
 # Turn on ozone damage?
