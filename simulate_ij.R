@@ -5,16 +5,6 @@
 
 # Both functions require access to variables in the global environment.
 
-################################################################################
-### Revision history
-################################################################################
-
-# Aug 2017: v1.0 finalized (Tai)
-# Oct 2018: Added new "Medlyn" stomatal conductance scheme in "Farquhar_Ball_Berry.R", and thus here necessary variables (e.g., vpd) are added. (Sun)
-# Feb 2019: Modified the way L_sun and L_sha are defined and calculated. We believe that A_can, R_can and g_can should be scaled up by LAI only, not by LAI + SAI. Therefore, L_sun and L_sha here should be sunlit and shaded leaf area index, not plant area index, but we still consider both LAI and SAI when calculating light extinction. Now they are renamed "LAI_sun" and "LAI_sha" and "LAI_sun" has to taken explicitly from canopy radiative transfer model. (Tai)
-# Feb 2019: Now aerodynamic conductance for heat, g_ah, is always calculated using either one of the two schemes (default from Monin_Obukhov.R vs. GEOS-Chem method in drydep_toolbox.R), and inputted into f_canopy_photosyn(). (Tai)
-# Jun 2019: Bug found in "PAR_absorb = f_PAR_absorb(PAR_beam=PAR_beam, ..., SAI=LAI, ...)". It should be "SAI=SAI" instead of "SAI=LAI". "L_sun" was systematically overestimated. Now fixed. However, this was a fix by Yung in v1.0 (9 Nov 2017), but it was somehow not included in v1.1. Now it has been fixed again by Ma (27 Jun 2019).
-
 ###############################################################################
 
 # Conduct hourly simulation for one single day, looping over i (global longitude index) and j (global latitude index):
@@ -33,8 +23,7 @@ f_simulate_ij = function(IJ) {
       } else if (var_name$res_level[ivar] == 'grid') {
          assign(x = paste0(current_var, '_hist_ijd'), value =  array(NA, dim=24/dt_hr))
       }
-   }
-   rm(current_var, ivar)
+   } ; rm(current_var, ivar)
    
    # Redefine new history outputs within function if not existent for next simulation step:
    if (O3_damage_flag) {
@@ -62,7 +51,7 @@ f_simulate_ij = function(IJ) {
    
    # Geopotential height of surface (m): 
    if (FLUXNET_flag){
-      site_info = read_excel(path = paste0(FLUXNET_dir, 'FLUXNET_site_info.xlsx'))
+      site_info = if (file.exists(paste0(FLUXNET_dir, 'FLUXNET_site_info.xlsx'))) read_excel(path = paste0(FLUXNET_dir, 'FLUXNET_site_info.xlsx')) else read_excel(path = paste0(FLUXNET_dir, 'FLUXNET_site_info.xlsx'))
       site_ind = match(FLUXNET_site_id, site_info$SITE_ID)
       Z_surf = as.double(unname(site_info[site_ind,"LOCATION_ELEV"]))
       rm(site_info, site_ind)
@@ -71,7 +60,6 @@ f_simulate_ij = function(IJ) {
    } else {
       Z_surf = PHIS[i,j]/g_E
    }
-   
    # Daily mean temperature (K):
    T_daily = mean(T2M[i,j,], na.rm=TRUE)
    
@@ -93,7 +81,25 @@ f_simulate_ij = function(IJ) {
       # 10-day mean air temperature (K):
       T_10d = T_daily
    }
-   
+   # Soil parameters:
+   # Saturated soil matric potential for bulk root zone (mm):
+   psi_sat = psi_sat_bulk[i,j]
+   # Saturated volumetric water content for bulk root zone (fraction):
+   theta_sat = theta_sat_bulk[i,j]
+   # Clapp and Homberger parameter for bulk root zone:
+   b_psi = b_psi_bulk[i,j]
+   # Saturated soil matric potential at top soil layer (mm):
+   psi_sat_top = psi_sat_bulk_top[i,j]
+   # Saturated volumetric water content at top soil layer (fraction):
+   theta_sat_top = theta_sat_bulk_top[i,j]
+   # Clapp and Homberger parameter at top soil layer (mm):
+   b_psi_top = b_psi_bulk_top[i,j]
+   # Saturated soil matric potential in bottom soil layer (mm):
+   psi_sat_bottom = psi_sat_bulk_bottom[i,j]
+   # Saturated volumetric water content in bottom soil layer (fraction):
+   theta_sat_bottom = theta_sat_bulk_bottom[i,j]
+   # Clapp and Homberger parameter in bottom soil layer:
+   b_psi_bottom = b_psi_bulk_bottom[i,j]
    # Soil albedo for PAR for dry and saturated soil:
    # 3rd dim of "soil albedo" = [dry (visible), dry (Near IR), saturated (visible), saturated (Near IR)]
    alpha_soil_dry = soil_albedo[i,j,1]
@@ -108,10 +114,10 @@ f_simulate_ij = function(IJ) {
    success = FALSE
    
    # PFT-specific parameters:
-   for (ipft in 2:length(pftname)) {
+   for (ipft in (sim_PFT + 1)) { # + 1 to shift counter bare land into the index
       
       # Leaf area index (m^2 m^-2):
-      if (leap & as.numeric(MM) > 2) n_PAI = n_day_whole - 1 else n_PAI = n_day_whole
+      n_PAI = if (leap & as.numeric(MM) > 2) n_day_whole - 1 else n_day_whole
       LAI = LAI_day_PFT[i,j,ipft,n_PAI]
       
       if (LAI < 0.01 | PFT_frac[i,j,ipft] < 0.01) {
@@ -129,9 +135,8 @@ f_simulate_ij = function(IJ) {
          SAI = SAI_day_PFT[i,j,ipft,n_PAI]
          # Consider LAI only?
          # SAI = 0
-         
          # Leaf area index of previous day (m^2 m^-2):
-         if (n_PAI == 1) LAI_prev_day = LAI_day_PFT[i,j,ipft,365] else LAI_prev_day = LAI_day_PFT[i,j,ipft,n_PAI-1]
+         LAI_prev_day = if (n_PAI == 1) LAI_day_PFT[i,j,ipft,365] else LAI_day_PFT[i,j,ipft,n_PAI-1]
          
          # PFT-level displacement height and roughness length (not used in the current version):
          # Canopy height (m):
@@ -179,16 +184,8 @@ f_simulate_ij = function(IJ) {
          tau_leaf = taulvis[ipft]
          # Stem transmittance for PAR:
          tau_stem = tausvis[ipft]
-         # Medlyn model parameter:
-         g1_med = g1_med_table[ipft]
-         
-         # Soil parameters:
-         # Saturated soil matric potential for bulk root zone (mm):
-         psi_sat = psi_sat_PFT[i,j,ipft]
-         # Saturated volumetric water content for bulk root zone (fraction):
-         theta_sat = theta_sat_PFT[i,j,ipft]
-         # Clapp and Homberger parameter for bulk root zone:
-         b_psi = b_psi_PFT[i,j,ipft]
+         # Fraction of roots in top soil layer:
+         root_frac_in_top = fraction_in_top[ipft]
          
          #######################################################################
          
@@ -242,10 +239,9 @@ f_simulate_ij = function(IJ) {
             # Liquid Precipitation (kg m-2 s-1): 
             prec_liq = if (FLUXNET_flag) PRECTOT[i,j,h] else PRECTOT[i,j,h] - PRECSNO[i,j,h] 
             # Snow depth (m):
-            if (FLUXNET_flag) d_snow = 0 else d_snow = SNODP[i,j,h]
+            d_snow = if (FLUXNET_flag) 0 else SNODP[i,j,h]
             # Latent heat (W m^-2):
             L_latent = EFLUX[i,j,h]
-            
             # Atmospheric scale height (m):
             Z_scale = R_da*(T_2m + 0.0065*(Z_surf + Z_disp + Z_0m + 2)/2)/g_E
             # Surface pressure (Pa):
@@ -274,7 +270,7 @@ f_simulate_ij = function(IJ) {
             theta_10m = if (FLUXNET_flag) T_10m + (g_E/c_p)*(Z_disp + Z_0m + 10) else T_10m*(P_surf/P_10m)^(R_da/c_p)
             # If "q_10m" is not provided, needed to scale it from the temperature difference (theta_10m - theta_2m).
             # Specific humidity (kg kg^-1):
-            q_10m = if (!exists('QV10M')) q_2m + (theta_10m - theta_2m)*c_p*ET/H_sen
+            q_10m = if (!exists('q_10m')) q_2m + (theta_10m - theta_2m)*c_p*ET/H_sen else q_10m
             # Vapor pressure (Pa):
             e_10m = P_10m*q_10m/(0.622 + 0.378*q_10m)
             # Moist air density (kg m^-3):
@@ -296,17 +292,20 @@ f_simulate_ij = function(IJ) {
             u_atm = u_10m
             # Moist air density (kg m^-3):
             rho_atm = rho_10m
+            
             # Conductance for water vapor:
             # Not needed anywhere now (Tai, Feb 2019):
-            # g_aw = if (Monin_Obukhov_flag) Monin_Obukhov$g_aw else NULL
+            # g_aw = if (infer_canopy_met_flag) Monin_Obukhov$g_aw else NULL
             # Conversion from molar to meteorological conductance:
             mol_to_met = 1e-6*R_uni*theta_atm/P_atm
             
-            ####################################################################
+            # Delete temporary meteorological variables:
+            rm(P_10m, T_10m, theta_10m, u_10m, rho_10m)
             
+            ####################################################################
             # Calculate aerodynamic conductance and/or temperature and humidity profiles using Monin Obukhov theory:
             # Now g_ah is always computed using either one of the two schemes below. (Tai, Feb 2019)
-            if (Monin_Obukhov_flag | use_TEMIR_ga_flag) {
+            if (infer_canopy_met_flag | (ga_scheme == 'CLM4.5')) {
                Monin_Obukhov = f_Monin_Obukhov(Z_0m=Z_0m, Z_atm=Z_atm, 
                                                H_sen=H_sen, ET=ET, 
                                                u_star=u_star, T_2m=T_2m, 
@@ -321,7 +320,6 @@ f_simulate_ij = function(IJ) {
                g_ah = min(c(Monin_Obukhov$g_ah, 1e4), na.rm=TRUE)
             } else {
                # Make use of f_Obuk() and f_aerodyn_cond() in "drydep_toolbox.R" to calculate aerodynamic conductance.
-               Monin_Obukhov = NULL
                # Obukhov length (m):
                L_Obuk = f_Obuk(rho=rho_atm, T.s=T_2m, ustar=u_star, H=H_sen)
                # Aerodynamic conductance for scalars (m s^-1):
@@ -335,14 +333,15 @@ f_simulate_ij = function(IJ) {
             
             # Canopy air temperature (K):
             # Surface temperature (at displacement height) is used as a proxy for canopy air temperature.
-            T_a = if (Monin_Obukhov_flag) Monin_Obukhov$T_s else T_2m
+            T_a = if (infer_canopy_met_flag) Monin_Obukhov$T_s else T_2m
             # Vegetation temperature (K):
             # Canopy air temperature is used as a proxy for vegetation temperature.
             T_v = T_a
             
             # Specific humidity in canopy air (kg kg^-1):
             # Surface humidity (at displacement height) is used as a proxy for humidity in canopy air.
-            q_a = if (Monin_Obukhov_flag) Monin_Obukhov$q_s else q_2m
+            q_a = if (infer_canopy_met_flag) Monin_Obukhov$q_s else q_2m
+            rm(Monin_Obukhov)
             # Vapor pressure in canopy air (Pa):
             e_a = P_atm*q_a/0.622
             
@@ -357,9 +356,17 @@ f_simulate_ij = function(IJ) {
             # Soil wetness for root zone (0-1):
             soil_wetness_root = GWETROOT[i,j,h]
             # Soil wetness for top soil (0-1):
-            soil_wetness_top = GWETTOP[i,j,h]
+            soil_wetness_top = if (FLUXNET_flag) GWETTOP[i,j,h] / theta_sat_top / 100 else GWETTOP[i,j,h]
+            # Soil wetness for bottom soil layer (0-1):
+            # Since GWETTOP and GWETROOT overlaps, in order to obtain wetness of bottom layer, the wetness of top layer is removed from GWETROOT here. 0.05 and 0.95 are the depths of top and bottom layers, respectively. Volumetric soil moisture is 
+            # theta_w = theta_sat*soil_wetness
+            # theta_w_top = theta_sat_top*soil_wetness_top 
+            # theta_w_bottom = (theta_w - theta_w_top*0.05)/0.95
+            soil_wetness_bottom = (theta_sat*soil_wetness_root - theta_sat_top*soil_wetness_top*0.05)/0.95 / theta_sat_bottom 
             # Soil volumetric water content for top soil (0-1):
-            theta_wtop = theta_sat*soil_wetness_top
+            # ... (Ma, Sep 2019)
+            # theta_wtop = theta_sat*soil_wetness_top
+            theta_wtop = theta_sat_top*soil_wetness_top
             # Cloud fraction (0-1):
             cldtot = CLDTOT[i,j,h]
             
@@ -396,7 +403,6 @@ f_simulate_ij = function(IJ) {
             ####################################################################
             
             # Find canopy transfer for PAR:
-            # Default TEMIR method is used unless otherwise specified.
             if (cos_SZA <= 0) {
                # Canopy light extinction coefficient:
                K_b = 1e6
@@ -416,7 +422,7 @@ f_simulate_ij = function(IJ) {
                # Surface albedo for visible light:
                surf_alb_beam = 0
                surf_alb_diff = 0
-            } else {
+            } else if (radiative_scheme == 'two-stream') {
                canopy_albedo = f_canopy_albedo(cos_SZA=cos_SZA, x_l=x_l, 
                                                LAI=LAI, SAI=SAI, 
                                                alpha_soil_dry=alpha_soil_dry, 
@@ -436,7 +442,6 @@ f_simulate_ij = function(IJ) {
                I_beam_sha = canopy_albedo$I_beam_sha
                I_diff_sha = canopy_albedo$I_diff_sha
                # Find absorbed PAR:
-               # A bug was found below: "SAI=LAI". It should be "SAI=SAI". Now fixed by Yung (9 Nov 2017). However, this fix was somehow not included in v1.1. Now it is fixed again by Ma (27 Jun 2019).
                PAR_absorb = f_PAR_absorb(PAR_beam=PAR_beam, PAR_diff=PAR_diff, 
                                          LAI=LAI, SAI=SAI, K_b=K_b, 
                                          I_beam_sun=I_beam_sun, 
@@ -457,46 +462,43 @@ f_simulate_ij = function(IJ) {
                # Surface albedo for visible light:
                surf_alb_beam = canopy_albedo$I_beam_up
                surf_alb_diff = canopy_albedo$I_diff_up
-            }
-            
-            # Use simplified radiative transfer scheme that is consistent with Zhang et al. (2002) dry deposition mechanisms to override "phi_sun", "phi_sha", "LAI_sun", "LAI_sha" and "K_b" from default model above: (Tai, Feb 2019)
-            if (simple_radiation_flag) {
-               if (cos_SZA > 0) {
+               rm(canopy_albedo)
+            } else if (radiative_scheme == 'Beer') {
+               
+               # Use simplified radiative transfer scheme that is consistent with Zhang et al. (2002) dry deposition mechanisms to override "phi_sun", "phi_sha", "LAI_sun", "LAI_sha" and "K_b" from default model above: (Tai, Feb 2019)
+               
+               # Absorbed photosynthetically active radiation by sunlit vs. shaded leaves (W m^-2):
+               phi_sha = PAR_diff * exp(-0.5 * LAI^0.8) + 0.07 * PAR_beam * (1.1 - 0.1 * LAI) * exp(-cos_SZA)  # PAR_beam corrected to PAR_diff (Tai, Feb 2019)
+               phi_sun = phi_sha + PAR_beam^0.8 * 0.5 / cos_SZA
+               # Canopy light extinction coefficient:
+               K_b = 0.5 / cos_SZA
+               # Sunlit and shaded leaf area index:
+               # Note that this is exactly equivalent to the default method but with K_b = 0.5/cos_SZA for spherical leaf orientation and considering light extinction by leaves only (not by stems). (Tai, Feb 2019)
+               LAI_sun = (1 - exp(-K_b * LAI)) / K_b
+               LAI_sha = LAI - LAI_sun
+               # Use Zhang et al. 2001 to calculate radiative transfer (Wong)
+               # We now use Norman (1982) (c.f. Guether (1995)) to reproduce the result of GEOS-Chem Wesely scheme.
+               if (((LAI < 2.5 | swr < 200) & drydep_scheme == 'Zhang') | (drydep_scheme == 'Wesely')) {
+                  # Please note, however, that Wesely scheme as exactly implemented in GEOS-Chem does not need phi_sun and phi_sha, but has its own way of accounting for light, although the original Wesely scheme does use them as input (Sun, Feb 2019).
                   # Absorbed photosynthetically active radiation by sunlit vs. shaded leaves (W m^-2):
-                  phi_sha = PAR_diff * exp(-0.5 * LAI^0.8) + 0.07 * PAR_beam * (1.1 - 0.1 * LAI) * exp(-cos_SZA)  # PAR_beam corrected to PAR_diff (Tai, Feb 2019)
-                  phi_sun = phi_sha + PAR_beam^0.8 * 0.5 / cos_SZA
-                  # Canopy light extinction coefficient:
-                  K_b = 0.5 / cos_SZA
-                  # Sunlit and shaded leaf area index:
-                  # Note that this is exactly equivalent to the default method but with K_b = 0.5/cos_SZA for spherical leaf orientation and considering light extinction by leaves only (not by stems). (Tai, Feb 2019)
-                  LAI_sun = (1 - exp(-K_b * LAI)) / K_b
-                  LAI_sha = LAI - LAI_sun
-                  # Use Zhang et al. 2001 to calculate radiative transfer (Wong)
-                  # We now use Norman (1982) (c.f. Guether (1995)) to reproduce the result of GEOS-Chem Wesely scheme.
-                  if (((LAI < 2.5 | swr < 200) & drydep_scheme == 'Zhang') | (drydep_scheme == 'Wesely')) {
-                     # Please note, however, that Wesely scheme as exactly implemented in GEOS-Chem does not need phi_sun and phi_sha, but has its own way of accounting for light, although the original Wesely scheme does use them as input (Sun, Feb 2019).
-                     # Absorbed photosynthetically active radiation by sunlit vs. shaded leaves (W m^-2):
-                     phi_sha = PAR_diff * exp(-0.5 * LAI^0.7) + 0.07 * PAR_beam * (1.1 - 0.1 * LAI) * exp(-cos_SZA)
-                     phi_sun = phi_sha + PAR_beam * 0.5 / cos_SZA
-                  }
-               } else {
-                  # Canopy light extinction coefficient:
-                  K_b = 1e6
-                  # Absorbed photosynthetically active radiation by sunlit vs. shaded leaves (W m^-2):
-                  phi_sun = 0
-                  phi_sha = 0
-                  # Fraction of sunlit and shaded leaf area
-                  LAI_sun = 0
-                  LAI_sha = LAI
+                  phi_sha = PAR_diff * exp(-0.5 * LAI^0.7) + 0.07 * PAR_beam * (1.1 - 0.1 * LAI) * exp(-cos_SZA)
+                  phi_sun = phi_sha + PAR_beam * 0.5 / cos_SZA
                }
             }
             
             ####################################################################
             
             # Soil water stress function:
-            beta_t = f_water_stress(soil_wetness=soil_wetness_root, 
+            beta_t = f_water_stress(soil_wetness=soil_wetness_root,
+                                    soil_wetness_bottom=soil_wetness_bottom,
+                                    soil_wetness_top=soil_wetness_top,
+                                    root_frac_in_top=root_frac_in_top,
+                                    theta_w=theta_w, theta_sat=theta_sat,
                                     psi_sat=psi_sat, b_psi=b_psi, 
-                                    psi_c=psi_c, psi_o=psi_o)
+                                    psi_c=psi_c, psi_o=psi_o,
+                                    psi_sat_top=psi_sat_top, b_psi_top=b_psi_top, 
+                                    psi_sat_bottom=psi_sat_bottom, b_psi_bottom=b_psi_bottom,
+                                    multilayer = soil_layer_scheme)
             
             # Find canopy photosynthesis:
             canopy_photosyn = f_canopy_photosyn(c_a=c_a, e_a=e_a, 
@@ -532,14 +534,14 @@ f_simulate_ij = function(IJ) {
                                                 leaf_N_conc=leaf_N_conc, 
                                                 u_leaf=u_leaf, d_leaf=d_leaf, 
                                                 met_cond=met_cond_flag, 
-                                                tol=1e-3, g1_med=g1_med)
+                                                tol=1e-3)
             
             # Total absorbed PAR (W m^-2):
             PAR_tot = phi_sun * LAI_sun + phi_sha * LAI_sha
             # Canopy-integrated stomatal resistance (s m^-1):
             R_s = min(c(1/(canopy_photosyn$g_s * (LAI_sun + LAI_sha)), 1e7), na.rm=TRUE)
             
-            # Calculate dry deposition velocity (now only for ozone):
+            # Calculate dry deposition velocity (now ONLY for ozone):
             if (!is.null(drydep_scheme)) {
                
                if (drydep_scheme == 'Wesely') {
@@ -563,20 +565,20 @@ f_simulate_ij = function(IJ) {
                   drycoeff = DRYCOEFF_table
                   
                   v_d = f_drydep_Wesely(rho = rho_atm, T.s = T_2m, H = H_sen, 
-                                      z0 = Z_0m, cz = (Z_atm + Z_0m), 
-                                      rsmin = rsmin, r_s = R_s, 
-                                      use_temir_rs = use_TEMIR_gs_flag, 
-                                      r_a = 1/g_ah, 
-                                      use_temir_ra = use_TEMIR_ga_flag, 
-                                      L = LAI, p = P_atm, mx = 48e-3, 
-                                      ustar = u_star, srad = swr, 
-                                      par = PAR_tot, hstar = 0.01, f0 = 1, 
-                                      h = z_can, SAI = SAI, e_a = e_a, 
-                                      cldfrac = cldtot, drycoeff = drycoeff, 
-                                      r.cut0 = rcut, rcls = rcl_s, 
-                                      rclo = rcl_o, rgs = rg_s, rgo = rg_o,
-                                      ra_g = ra_g, cosSZA = cos_SZA, 
-                                      co2_scale = CO2_scale_flag)
+                                        z0 = Z_0m, cz = (Z_atm + Z_0m), 
+                                        rsmin = rsmin, r_s = R_s, 
+                                        use_temir_rs = (gs_scheme_type == 'ecophysiological'), 
+                                        r_a = 1/g_ah, 
+                                        use_temir_ra = (ga_scheme == 'CLM4.5'), 
+                                        L = LAI, p = P_atm, mx = 48e-3, 
+                                        ustar = u_star, srad = swr, 
+                                        par = PAR_tot, hstar = 0.01, f0 = 1, 
+                                        h = z_can, SAI = SAI, e_a = e_a, 
+                                        cldfrac = cldtot, drycoeff = drycoeff, 
+                                        r.cut0 = rcut, rcls = rcl_s, 
+                                        rclo = rcl_o, rgs = rg_s, rgo = rg_o,
+                                        ra_g = ra_g, cosSZA = cos_SZA, 
+                                        co2_scale = CO2_scale_flag)
                   
                }
                
@@ -586,7 +588,7 @@ f_simulate_ij = function(IJ) {
                   # shsun 3/30/2018
                   # 1 mm hr^-1 = 2.78E-7 kg m^-2 s^-1
                   # rain.threshold = 0.2 / 3600 # Convert from mm hr^-1 to kg m^-2 s^-1
-                  if (FLUXNET_flag == TRUE) rain.threshold = 0.2 else rain.threshold = 0.2/1000/3600
+                  if (FLUXNET_flag) rain.threshold = 0.2 else rain.threshold = 0.2/1000/3600
                   
                   is_wet = (prec_liq > rain.threshold) | (L_latent < 0)   # le: latent heat
                   
@@ -610,26 +612,26 @@ f_simulate_ij = function(IJ) {
                   
                   # new PAR calculation (Anthony) 
                   v_d = f_drydep_Zhang(rho = rho_atm, T.s = T_2m, H = H_sen, 
-                                     z0 = Z_0m, cz = (Z_atm + Z_0m), r_s = R_s, 
-                                     use_temir_rs = use_TEMIR_gs_flag, 
-                                     r_a = 1/g_ah, 
-                                     use_temir_ra = use_TEMIR_ga_flag, 
-                                     use_temir_beta = use_TEMIR_beta_flag, 
-                                     rsmin = rst.min, brs = b.rs, 
-                                     par.sun = phi_sun, par.sha = phi_sha, 
-                                     Lsun = LAI_sun, Lsha = LAI_sha, 
-                                     tmin = t.min.st, tmax = t.max.st, 
-                                     topt = t.opt.st, vpd = vpd, bvpd = b.vpd, 
-                                     e_a = e_a, srad = swr, psi.min = psi.min, 
-                                     psi.max = psi.max, use.betat = FALSE, 
-                                     betat = beta_t, L = LAI, LAI_min = LAI_min,
-                                     LAI_max = LAI_max, rac0_min = rac0_min, 
-                                     rac0_max = rac0_max, p = P_atm, 
-                                     mx = 48e-3, ustar = u_star, hstar = 0.01, 
-                                     f0 = 1, h = z_can, SAI = SAI, 
-                                     fsnow = fsnow, is.wet = is_wet, 
-                                     r.cut0 = r.cut0, rgs = rgs, rgo = rgo, 
-                                     co2_scale = CO2_scale_flag)
+                                       z0 = Z_0m, cz = (Z_atm + Z_0m), r_s = R_s, 
+                                       use_temir_rs = (gs_scheme_type == 'ecophysiological'), 
+                                       r_a = 1/g_ah, 
+                                       use_temir_ra = (ga_scheme == 'CLM4.5'), 
+                                       use_temir_beta = (gs_water_stress_scheme == 'CLM4.5'), 
+                                       rsmin = rst.min, brs = b.rs, 
+                                       par.sun = phi_sun, par.sha = phi_sha, 
+                                       Lsun = LAI_sun, Lsha = LAI_sha, 
+                                       tmin = t.min.st, tmax = t.max.st, 
+                                       topt = t.opt.st, vpd = vpd, bvpd = b.vpd, 
+                                       e_a = e_a, srad = swr, psi.min = psi.min, 
+                                       psi.max = psi.max, use.betat = FALSE, 
+                                       betat = beta_t, L = LAI, LAI_min = LAI_min,
+                                       LAI_max = LAI_max, rac0_min = rac0_min, 
+                                       rac0_max = rac0_max, p = P_atm, 
+                                       mx = 48e-3, ustar = u_star, hstar = 0.01, 
+                                       f0 = 1, h = z_can, SAI = SAI, 
+                                       fsnow = fsnow, is.wet = is_wet, 
+                                       r.cut0 = r.cut0, rgs = rgs, rgo = rgo, 
+                                       co2_scale = CO2_scale_flag)
                   
                }
                
