@@ -522,7 +522,13 @@ for (d in 1:n_day_sim) {
    
    # Simulate for each lon/lat:
    print('Simulating for each lon/lat...', quote=FALSE)
-   hist_ij = if (n_core != 1) mclapply(ij, FUN=f_simulate_ij, mc.cores=n_core) else lapply(ij, FUN=f_simulate_ij)
+   hist_ij = if (n_core != 1) { 
+      if (Sys.info()["sysname"] == 'Windows') {
+         cl = makeCluster(getOption("cl.cores", n_core))
+         parLapply(cl = cl, X = ij, fun=f_simulate_ij)
+         stopCluster(cl)
+      } else { mclapply(ij, FUN=f_simulate_ij, mc.cores=n_core) } 
+   } else lapply(ij, FUN=f_simulate_ij)
    print(paste0('Done on ', Sys.time()), quote=FALSE)
    
    if (debug_flag) {
