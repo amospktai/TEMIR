@@ -14,94 +14,42 @@ library(ncdf4) # For reading ncdf4 files
 library(filesstrings) # For file and directory manipulations
 # Load libraries for post-simulation processing:
 library(grid) # For graphics
-library(spam) # For matrix manipulations
+suppressMessages(library(spam)) # For matrix manipulations
 library(maps) # For map display
-library(fields) # For spatial data
+suppressMessages(library(fields)) # For spatial data
 timestamp()
-
-################################################################################
-### Directories:
-################################################################################
-
-# Required directories:
-
-# Set TEMIR directory:
-TEMIR_dir = '~/Dropbox/TGABI/TEMIR/'
-# Set source code directory:
-code_dir = paste0(TEMIR_dir, 'code_v1.1/')
-# Set meteorological data directory:
-met_data_dir = paste0(TEMIR_dir, 'TEMIR_inputs/met_data/GEOS_2x2.5.d/')
-# Set PFT and surface data directory:
-surf_data_dir = paste0(TEMIR_dir, 'TEMIR_inputs/clm2_data/')
-# Set processed PFT and surface output directory:
-processed_surf_data_dir = paste0(TEMIR_dir, 'TEMIR_inputs/processed_surf_data/')
-
-################################################################################
-
-# Optional directories:
-
-# Set FLUXNET directory (set as NA if this is not available):
-# FLUXNET_dir = NA
-FLUXNET_dir = paste0(TEMIR_dir, 'TEMIR_inputs/FLUXNET/')
-
-# Whatever are specified below, they will be overridden by "O3_data_dir" and "LAI_data_dir" set in the input script. They are preliminarily defined here to avoid problems during checking directory paths (below) when the execution script is re-run in the same console. (Tai, Feb 2019)
-# Set user-defined LAI data directory (containing LAI nc files):
-LAI_data_dir = NA
-# Set ozone data directory:
-O3_data_dir = NA
-# *** "LAI_data_dir" and "O3_data_dir" are to be overridden by what you set in the input script. ***
 
 ################################################################################
 ### Source input scripts for model configuration:
 ################################################################################
 
-# Check existence of directory paths:
-dir_check = ls(pattern = "_dir$")
-optional_dirs = c('FLUXNET_dir', 'LAI_data_dir', 'O3_data_dir')
-NA_dirs = match(optional_dirs, dir_check)[is.na(sapply(X = optional_dirs, FUN = get))]
-if (length(NA_dirs) != 0) dir_check = dir_check[-NA_dirs] 
-for (idir in seq_along(dir_check)) {
-   # if (length(Sys.glob(paths = get(dir_check[idir]))) == 0) stop(paste0(dir_check[idir], ' does not exist!'))
-   if (!dir.exists(paths = get(dir_check[idir]))) stop(paste0(dir_check[idir], ' does not exist!'))
-   # assign(dir_check[idir], paste0(file_path_as_absolute(Sys.glob(get(dir_check[idir]))), '/'))
-}
-rm(dir_check, idir, optional_dirs, NA_dirs)
-
-# Check whether the current working directory is a simulation directory:
-simulation_name.txt = paste0(basename(getwd()), '.txt')
-if (!file.exists(simulation_name.txt)) stop('Current working directory is not a simulation directory containing the execution_v*.R script! Please set the working directory to be the simulation directory to run the model.')
-rm(simulation_name.txt)
-
 # Set simulation directory:
 simulation_dir = paste0(getwd(), '/')
+
+# Check existence of directory paths:
+dir_check = ls(pattern = "_dir$")
+for (idir in seq_along(dir_check)) {
+   if (!dir.exists(paths = get(dir_check[idir]))) stop(paste0(dir_check[idir], ' does not exist!'))
+} ; rm(dir_check, idir)
+
+# Print directory paths:
 print(paste0('Simulation directory: ', simulation_dir), quote=FALSE)
-print('Please make sure this is the simulation that you desire!', quote=FALSE)
-cat('\n')
-
-# Current TEMIR execution and input_TEMIR directory path:
-# simulation_dir = paste0(file_path_as_absolute('.'), '/')
-# if (dirname(simulation_dir) != file_path_as_absolute(TEMIR_dir)) simulation_dir = file_path_as_absolute(dirname(sub('--file=', '', commandArgs(trailingOnly = FALSE)[grep('--file=', commandArgs(trailingOnly = FALSE))])))
-
-# Check TEMIR directory path:
-# if (dirname(simulation_dir) != file_path_as_absolute(TEMIR_dir)) {
-   # print(paste0('Simulation directory : ', simulation_dir))
-   # print(paste0('TEMIR directory : ', TEMIR_dir))
-   # stop('Simulation directory is not a subdirectory in the TEMIR directory!')
-# }
-# setwd(simulation_dir)
+print('Please make sure this is the simulation that you desire!', quote=FALSE) ; cat('\n')
+print(paste0('Code directory: ', code_dir), quote=FALSE)
+print('Please make sure this is the code directory that you desire!', quote=FALSE) ; cat('\n')
 
 # Source input scripts:
-# *** Please make sure the input scripts (e.g., input_TEMIR_ecophysiol.R) are in the same simulation directory as this execution script. ***
+# *** Please make sure the input scripts (e.g., input_TEMIR.R) are in the same simulation directory as this execution script. ***
 input_scripts = list.files(path = simulation_dir, pattern = "^input_")
 for (script in input_scripts) {
    source(file = paste0(simulation_dir, script))
 }
 
-# Get simulation configuration:
+# Get simulation configuration for saving:
 model_config_vec = setdiff(ls(), ls(pattern = '_dir$'))
 
-# Turn on default TEMIR aerodynamic conductance scheme if Monin_Obukhov_flag=TRUE:
-if (Monin_Obukhov_flag) use_TEMIR_ga_flag = TRUE
+# Turn on default TEMIR aerodynamic conductance scheme if infer_canopy_met_flag=TRUE:
+if (infer_canopy_met_flag) ga_scheme = 'CLM4.5'
 
 ################################################################################
 ### Source scripts
@@ -131,11 +79,7 @@ source(paste0(code_dir, 'simulate_ij.R'))
 source(paste0(code_dir, 'drydep_toolbox.R'))
 
 # Functions to incorporate FLUXNET datasets:
-if (!is.na(FLUXNET_dir)) source(paste0(code_dir, 'FLUXNET_functions.R'))
-
-# Functions to incorporate meteorological data:
-# Obsolete, but may revive for future purposes (Tai, Jan 2019)
-# source(paste0(code_dir, 'met_tools.R'))
+if (FLUXNET_site_flag) source(paste0(code_dir, 'FLUXNET_functions.R'))
 
 # Surface and PFT input parameters (prescribed):
 source(paste0(code_dir, 'PFT_surf_data.R'))
@@ -146,34 +90,20 @@ source(paste0(code_dir, 'PFT_surf_data.R'))
 
 cat('\n')
 
-# Time step (s):
-dt = dt_hr*3600
-
-# Vector of simulation dates:
-date_vec = make.date.vec(start.date=start_date, end.date=end_date)
-
-# Number of simulation days:
-n_day_sim = length(date_vec)
-
 # Biogeochemistry setting:
 if (!exists('biogeochem_flag')) biogeochem_flag = FALSE
 
-# Global simulation setting:
-if (!single_site_flag) {
-   # Set FLUXNET_flag as FALSE as single_site_flag is FALSE 
-   FLUXNET_site_flag = FALSE
-   FLUXNET_flag = FALSE
-}
-
 # FLUXNET site setting:
-if (FLUXNET_site_flag){
-   if (FLUXNET_flag){
+if (FLUXNET_site_flag) {
+   if (FLUXNET_flag) {
+      
       # Check for FLUXNET data availability over the simulation days:
       FLUXNET_time_info = f_FLUXNET_UTC_2_local(FLUXNET.dir = FLUXNET_dir, date = start_date, site.id = FLUXNET_site_id, utc.offset = NA, out.utc.offset = TRUE)
       time_shift = FLUXNET_time_info$time_diff
       shifted_start = FLUXNET_time_info$time ; rm(FLUXNET_time_info)
       shifted_end = f_FLUXNET_UTC_2_local(FLUXNET.dir = FLUXNET_dir, date = to.yyyymmdd(from.yyyymmdd(end_date) + 24), site.id = FLUXNET_site_id, utc.offset = time_shift, out.utc.offset = FALSE)
       day_mod_flag = FALSE
+      
       # Shift start date by one day to see if data is in range
       if (!f_FLUXNET_date_range(FLUXNET.dir = FLUXNET_dir, start.or.end.year = 'start', whole.date.for.year = shifted_start, site.id = FLUXNET_site_id)) {
          temp_date = start_date
@@ -182,6 +112,7 @@ if (FLUXNET_site_flag){
          print(paste0('So delaying start_date ', temp_date,' to the next day ', start_date), quote = FALSE); remove(temp_date)
          day_mod_flag = TRUE
       }
+      
       # Shift end date by one day to see if data is in range
       if (!f_FLUXNET_date_range(FLUXNET.dir = FLUXNET_dir, start.or.end.year = 'end', whole.date.for.year = shifted_end, site.id = FLUXNET_site_id)) {
          temp_date = end_date
@@ -190,25 +121,38 @@ if (FLUXNET_site_flag){
          print(paste0('So advancing end_date ', temp_date,' to the previous day ', end_date), quote = FALSE); remove(temp_date)
          day_mod_flag = TRUE
       }
+      
       # Check for FLUXNET data availability over the shifted simulation days:
       if (day_mod_flag) {
          FLUXNET_time_info = f_FLUXNET_UTC_2_local(FLUXNET.dir = FLUXNET_dir, date = start_date, site.id = FLUXNET_site_id, utc.offset = NA, out.utc.offset = TRUE)
          time_shift = FLUXNET_time_info$time_diff
          shifted_start = FLUXNET_time_info$time ; rm(FLUXNET_time_info)
          shifted_end = f_FLUXNET_UTC_2_local(FLUXNET.dir = FLUXNET_dir, date = to.yyyymmdd(from.yyyymmdd(end_date) + 24), site.id = FLUXNET_site_id, utc.offset = time_shift, out.utc.offset = FALSE)
+         
          # Check if FLUXNET data is available for shifted dates
          if (!f_FLUXNET_date_range(FLUXNET.dir = FLUXNET_dir, start.or.end.year = 'start', whole.date.for.year = shifted_start, site.id = FLUXNET_site_id)) stop(paste0('Time shifted FLUXNET data is not available for start_date even after delaying by a day!!! Please check FLUXNET data of site ', FLUXNET_site_id, '....'))
          if (!f_FLUXNET_date_range(FLUXNET.dir = FLUXNET_dir, start.or.end.year = 'end', whole.date.for.year = shifted_end, site.id = FLUXNET_site_id)) stop(paste0('Time shifted FLUXNET data is not available for end_date even after advancing by a day!!! Please check FLUXNET data of site ', FLUXNET_site_id, '....'))
       }
+      
       # FLUXNET data taken as better data, replacing Monin-Obukhov outputs:
-      Monin_Obukhov_flag = FALSE
+      infer_canopy_cond_flag = FALSE
    }
+   
    # Get location (lon, lat) from FLUXNET_site_id:
    FLUXNET_lon_lat = f_lon_lat_sim_from_FLUXNET(FLUXNET.dir = FLUXNET_dir, site.id = FLUXNET_site_id)
    lon_sim = FLUXNET_lon_lat$lon_sim
    lat_sim = FLUXNET_lon_lat$lat_sim
    rm(FLUXNET_lon_lat)
-}
+} else FLUXNET_flag = FALSE
+
+# Time step (s):
+dt = dt_hr*3600
+
+# Vector of simulation dates:
+date_vec = make.date.vec(start.date=start_date, end.date=end_date)
+
+# Number of simulation days:
+n_day_sim = length(date_vec)
 
 # Corresponding indices in global lon/lat grid for the simulated region:
 if (single_site_flag) {
@@ -233,7 +177,7 @@ for (n_i in 1:length(ind_lon)) {
             if (!FLUXNET_site_flag) {
                print(paste0('Single site simulation using ', met_name, ' data :'), quote = FALSE)
                print(paste0('Longitude = ', lon_sim, ', Latitude = ', lat_sim), quote = FALSE)
-               print(paste0('Land cover fraction of site = ', FRLAND[i,j]), quote = FALSE)
+               print(paste0('Land cover fraction of site = ', signif(FRLAND[i,j])), quote = FALSE)
             } else { 
                if (FLUXNET_flag){
                   print(paste0('Simulation using FLUXNET data of site ', FLUXNET_site_id, ' (gapfilled with ', met_name, '):'), quote = FALSE)
@@ -241,7 +185,7 @@ for (n_i in 1:length(ind_lon)) {
                   print(paste0('Simulation using ', met_name, ' data of FLUXNET site ', FLUXNET_site_id, ' :'), quote = FALSE)
                }
                print(paste0('Longitude = ', lon_sim, ', Latitude = ', lat_sim), quote = FALSE)
-               print(paste0('Land cover fraction of site ', FLUXNET_site_id, ' = ', FRLAND[i,j]), quote = FALSE)
+               print(paste0('Land cover fraction of site ', FLUXNET_site_id, ' = ', signif(FRLAND[i,j])), quote = FALSE)
             }
          } else stop('Grid cell contains no land!!!')
       } else { 
@@ -255,7 +199,7 @@ for (n_i in 1:length(ind_lon)) {
          }
       }   
    }
-}
+} ; rm(n, n_i)
 
 # Print general simulation information:
 if (!single_site_flag) {
@@ -306,7 +250,7 @@ if (cluster_flag) {
    if (is.na(n_node)) n_node = 1
    if (n_node > 1) stop('CLM-R cannot be run on multiple nodes!')
 }
-if (multicore_flag) print(paste0('# of cores used: ', as.character(n_core)), quote=FALSE) else print('# of cores used: 1', quote=FALSE)
+print(paste0('# of cores used: ', as.character(n_core)), quote=FALSE)
 
 # Continue run:
 if (continue_flag) print('Continuing simulation from previous run...', quote=FALSE)
@@ -333,7 +277,7 @@ input_data_df = `colnames<-`(rbind.data.frame(
    # Root zone soil wetness (0-1)
    c('GWETROOT', '0-1', 'GWETROOT', FALSE, 'GWETROOT', FALSE, NA, FALSE),
    # Top soil wetness (0-1)
-   c('GWETTOP','0-1', 'GWETTOP', FALSE, 'GWETTOP', FALSE, NA, FALSE),
+   c('GWETTOP','0-1', 'GWETTOP', FALSE, 'GWETTOP', FALSE, 'SWC_F_MDS_1', FALSE),
    # Sea-level pressure (Pa)
    c('SLP', 'Pa', 'SLP', FALSE, 'SLP', TRUE, NA, FALSE),
    # Atmospheric pressure (Pa)
@@ -401,7 +345,7 @@ if (FLUXNET_flag) {
    
    # Subset half-hourly data into hourly data if required
    if (dt_hr == 1 && substr(basename(FLUXNET_file), 32, 33) == 'HH') {
-      print('NOTE : Half-hourly data is subsetted into hourly data BUT precipitation is coverted accordingly')
+      print('NOTE : Half-hourly data is subsetted into hourly data BUT precipitation is coverted and not subsetted!')
       HH_to_HR_flag = TRUE
    } else HH_to_HR_flag = FALSE
    
@@ -435,20 +379,21 @@ for (d in 1:n_day_sim) {
    if (FLUXNET_flag){
       FLUXNET_current = f_FLUXNET_UTC_2_local(FLUXNET.dir = FLUXNET_dir, date = current_date, site.id = FLUXNET_site_id, utc.offset = time_shift, out.utc.offset = FALSE)
       FLUXNET_end = f_FLUXNET_UTC_2_local(FLUXNET.dir = FLUXNET_dir, date = to.yyyymmdd(from.yyyymmdd(current_date) + 24), site.id = FLUXNET_site_id, utc.offset = time_shift, out.utc.offset = FALSE)
-      # Time shift obtained daily as daylight saving time is not required as Fluxnet discounts daylight saving time
+      # Time shift obtained daily as daylight saving time is not required as FLUXNET discounts daylight saving time
    }
    
    #############################################################################
    
    # Reload interannually varying inputs on YYYY/01/01 if necessary:
    
-   if (paste0(MM, DD) == '0101' & substr(start_date, 5, 8) != '0101') {
+   if (paste0(MM, DD) == '0101' ) {
       
       # Reload LAI data if interannually varying LAI data are used:
       if (LAI_data_flag) {
          if (length(year_vec) > 1) {
             YYYY_LAI = as.character(LAI_used_years[which(year_vec == as.numeric(YYYY))])
             last_YYYY_LAI = as.character(LAI_used_years[which(year_vec == as.numeric(YYYY)) - 1])
+            if (length(last_YYYY_LAI) == 0) last_YYYY_LAI = 'no_YYYY_LAI'
             if (YYYY_LAI != last_YYYY_LAI) {
                subfn = paste0('daily_monthly_LAI_data_', YYYY_LAI, '.RData')
                filename = paste0(processed_surf_data_dir, subfn)
@@ -463,6 +408,7 @@ for (d in 1:n_day_sim) {
          if (length(year_vec) > 1) {
             YYYY_O3 = as.character(O3_used_years[which(year_vec == as.numeric(YYYY))])
             last_YYYY_O3 = as.character(O3_used_years[which(year_vec == as.numeric(YYYY)) - 1])
+            if (length(last_YYYY_O3) == 0) last_YYYY_O3 = 'no_YYYY_O3'
             if (YYYY_O3 != last_YYYY_O3) {
                filename = paste0(O3_data_dir, O3_subn1, YYYY_O3, O3_subn2)
                print(paste0('Loading surface O3 concentrations from ', filename, '...'), quote=FALSE)
@@ -481,7 +427,6 @@ for (d in 1:n_day_sim) {
             }
          }
       }
-      
    }
    
    #############################################################################
@@ -532,7 +477,7 @@ for (d in 1:n_day_sim) {
       start_ind = match(FLUXNET_current,FLUXNET_selected_data$TIMESTAMP_START)
       end_ind = match(FLUXNET_end,FLUXNET_selected_data$TIMESTAMP_START) - 1
       # Check if FLUXNET data extraction is successful
-      if (start_ind < 0 || is.na(end_ind)) stop(paste('Error in FLUXNET Data input range!!!', start_ind, end_ind))
+      if (start_ind < 0 || is.na(end_ind)) stop(paste('Error in FLUXNET data input range!!!', start_ind, end_ind))
       
       # Select current FLUXNET data:
       FLUXNET_day_data = FLUXNET_selected_data[start_ind:end_ind,]
@@ -559,17 +504,12 @@ for (d in 1:n_day_sim) {
          
          # Get FLUXNET variable error if exists
          if (!is.null(temporary$err_out)) {
-            if (is.null(FLUXNET_var_err)) {
-               FLUXNET_var_err = rbind(temporary$err_out)
-            } else {
-               FLUXNET_var_err = rbind(FLUXNET_var_err, temporary$err_out)
-            }
+            FLUXNET_var_err = if (is.null(FLUXNET_var_err)) rbind(temporary$err_out) else rbind(FLUXNET_var_err, temporary$err_out)
          }
-         
-      }
+      } ; rm(temporary)
       
       # Make FLUXNET error for archive: (not supported by ncdf4 as matrix dimnames are lost when archiving nc)
-      if (!is.null(FLUXNET_var_err) && is.na(match('FLUXNET_error', names(var_list)))) {
+      if (FALSE && !is.null(FLUXNET_var_err) && is.na(match('FLUXNET_error', names(var_list)))) {
          err_nchar = ncdim_def(name='error_name_length', units='', vals=1:8, create_dimvar=FALSE)
          err_row = ncdim_def(name='error_number', units='', vals=1:nrow(FLUXNET_var_err),  longname='Number of Variable Error')
          err_col = ncdim_def(name='error_replace', units='', vals=1:2, longname='Error and Replacement Variables')
@@ -586,7 +526,13 @@ for (d in 1:n_day_sim) {
    
    # Simulate for each lon/lat:
    print('Simulating for each lon/lat...', quote=FALSE)
-   if (multicore_flag) hist_ij = mclapply(ij, FUN=f_simulate_ij, mc.cores=n_core) else hist_ij = lapply(ij, FUN=f_simulate_ij)
+   hist_ij = if (n_core != 1) { 
+      if (Sys.info()["sysname"] == 'Windows') {
+         cl = makeCluster(getOption("cl.cores", n_core))
+         parLapply(cl = cl, X = ij, fun=f_simulate_ij)
+         stopCluster(cl)
+      } else { mclapply(ij, FUN=f_simulate_ij, mc.cores=n_core) } 
+   } else lapply(ij, FUN=f_simulate_ij)
    print(paste0('Done on ', Sys.time()), quote=FALSE)
    
    if (debug_flag) {
@@ -640,7 +586,7 @@ for (d in 1:n_day_sim) {
          ncatt_put(nc, varid=0, attname='History', attval=paste0('Generated on ', Sys.time()))
          
          # FLUXNET data warnings:
-         if (single_site_flag && FLUXNET_flag) {
+         if (FALSE && single_site_flag && FLUXNET_flag) {
             ncatt_put(nc, varid=0, attname='FLUXNET Site Warnings', attval=FLUXNET_global_err)
             if (!is.null(FLUXNET_var_err)) {
                ncvar_put(nc, varid=FLUXNET_err_nc_def, vals=FLUXNET_var_err)
@@ -670,8 +616,7 @@ for (d in 1:n_day_sim) {
       d_prev = 15
       previous_date = to.yyyymmdd(from.yyyymmdd(current_date) - d_prev*24)
       pathname = paste0(simulation_dir, 'temp_data/temp_', as.character(previous_date))
-      #system(command = paste0('rm -rf ', pathname))
-      dir.remove(pathname)
+      suppressMessages(dir.remove(pathname))
    }
 }
 

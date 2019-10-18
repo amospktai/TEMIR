@@ -107,9 +107,6 @@ lnctop = 1/(leafcn*slatop)
 vcmax25top = lnctop*flnr*fnr*ar25
 vcmax25top[1] = 0
 
-# Parameters for Medlyn model
-g1_med_table = c(NA, 2.35, 2.35, 2.35, 4.12, 4.12, 4.45, 4.45, 4.45, 4.7, 4.7, 4.7, 2.22, 5.25, 1.62, NA, NA, 1.79, 1.79, NA, NA, NA, NA, 5.79, 5.79)
-
 ################################################################################
 ### Surface data from CLM default ncdf file:
 ################################################################################
@@ -124,7 +121,12 @@ LONGXY = ncvar_get(nc, 'LONGXY')
 LON_CLM = LONGXY[,1]
 LATIXY = ncvar_get(nc, 'LATIXY')
 LAT_CLM = LATIXY[1,]
-nlevsoi = 10
+# Number of CLM soil layers within CLM root zone:
+nlevsoi = 10   
+# Number of CLM soil layers within TEMIR top soil layer:
+nlevsoi_top = 3  
+# Number of CLM soil layers within TEMIR root zone:
+nlevsoi_root = 8  
 # # Indices of natural PFT:
 # natpft = ncvar_get(nc, 'natpft')
 # # Indices of crop PFT:
@@ -201,21 +203,42 @@ theta_satmin = 0.489 - 0.00126*PCT_SAND
 theta_satom = 0.9
 # Saturated volumetric water content (0-1):
 theta_sat_xyz = (1 - om_frac)*theta_satmin + om_frac*theta_satom
+#Saturated volumetric water content in TEMIR top soil layer (0-1):
+theta_sat_xyz_top = theta_sat_xyz[, , 1:nlevsoi_top]
+#Saturated volumetric water content in TEMIR bottom soil layer (0-1):
+theta_sat_xyz_bottom = theta_sat_xyz[, , nlevsoi_top:nlevsoi_root]
+#Saturated volumetric water content in TEMIR root zone (0-1):
+theta_sat_xyz_root = theta_sat_xyz[, , 1:nlevsoi_root]
 # Clapp and Homberger parameter for mineral soil:
 b_psimin = 2.91 + 0.159*PCT_CLAY
 # Clapp and Homberger parameter for organic matter:
 b_psiom = 2.7
 # Clapp and Homberger parameter:
 b_psi_xyz = (1 - om_frac)*b_psimin + om_frac*b_psiom
+# Clapp and Homberger parameter in TEMIR top soil layer:
+b_psi_xyz_top = b_psi_xyz[, , 1:nlevsoi_top]
+# Clapp and Homberger parameter in TEMIR bottom soil layer:
+b_psi_xyz_bottom = b_psi_xyz[, , nlevsoi_top:nlevsoi_root]
+# Clapp and Homberger parameter in TEMIR root zone:
+b_psi_xyz_root = b_psi_xyz[, , 1:nlevsoi_root]
 # Saturated mineral soil matric potential (mm):
 psi_satmin = -10.0*10^(1.88 - 0.0131*PCT_SAND)
 # Saturated organic matter matric potential (mm):
 psi_satom = -10.3
 # Saturated soil matric potential (mm):
 psi_sat_xyz = (1 - om_frac)*psi_satmin + om_frac*psi_satom
+# Saturated soil matric potential in TEMIR top soil layer (mm):
+psi_sat_xyz_top = psi_sat_xyz[, , 1:nlevsoi_top]
+# Saturated soil matric potential in TEMIR bottom soil layer (mm):
+psi_sat_xyz_bottom = psi_sat_xyz[, , nlevsoi_top:nlevsoi_root]
+# Saturated soil matric potential in TEMIR root zone (mm):
+psi_sat_xyz_root = psi_sat_xyz[, , 1:nlevsoi_root]
 
 # Depth at layer interface for top 10 layers plus the soil surface (m):
 z_hi = c(0, 0.0175, 0.0451, 0.0906, 0.1655, 0.2891, 0.4929, 0.8289, 1.3828, 2.2961, 3.8019)
+# Thickness of each soil layer for top 10 layers (m):
+soil_thickness = c(0.0175, 0.0276, 0.0455, 0.075, 0.1236, 0.2038, 0.3360, 0.5539, 0.9133, 1.5058)
+
 # Root fraction (0-1) (dim1 = PFT; dim2 = soil level):
 root_frac = matrix(0, nrow=length(pftname), ncol=nlevsoi)
 for (i in 1:nlevsoi) {
@@ -225,34 +248,100 @@ for (i in 1:nlevsoi) {
       root_frac[,i] = 0.5*(exp(-roota_par*z_hi[i]) + exp(-rootb_par*z_hi[i]))
    }
 }
+# Depth of TEMIR top soil layer (m):
+z1_TEMIR = 0.05 
+# Depth of TEMIR root zone (m):
+z2_TEMIR = 1 
+# Index of the lowest CLM soil layer which bounds TEMIR top soil layer:
+z1_ind = tail(which(z_hi < z1_TEMIR), 1)
+# Index of the lowest CLM soil layer which bounds TEMIR root zone:
+z2_ind = tail(which(z_hi < z2_TEMIR), 1)
+# Soil thickness and root fraction at the bounding CLM layers (m):
+soil_thickness_bound_top = z1_TEMIR - z_hi[z1_ind]
+soil_thickness_bound_root = z2_TEMIR - z_hi[z2_ind]
+root_frac_bound =  0.5*(exp(-roota_par*z_hi[z1_ind]) + exp(-rootb_par*z_hi[z1_ind]) - exp(-roota_par*z1_TEMIR) - exp(-rootb_par*z1_TEMIR))
+# # Soil and root portions at the bounding CLM layers (0-1):
+# frac_bound_soil_top = soil_thickness_bound_top/soil_thickness[z1_ind]
+# frac_bound_soil_root = soil_thickness_bound_root/soil_thickness[z2_ind]
+# frac_bound_root = root_frac_bound/root_frac[, z1_ind]
+# Soil fraction with respect to two TEMIR soil layers (0-1):
+soil_frac_top = matrix(0, nrow=1, ncol=nlevsoi_top)
+for (i in 1:nlevsoi_top) {
+  if (i < nlevsoi_top) {
+    soil_frac_top[i] = soil_thickness[i]/z1_TEMIR
+  } else {
+    # soil_frac_top[i] = soil_thickness[i]*frac_bound_soil_top/z1_TEMIR
+    soil_frac_top[i] = soil_thickness_bound_top/z1_TEMIR
+  }
+}
+#soil_frac_top = matrix(rep(soil_frac_top, each = length(pftname)), nrow = length(pftname), byrow = FALSE)
+soil_frac_bottom = matrix(0, nrow=1, ncol=(nlevsoi_root - nlevsoi_top + 1))
+for (i in nlevsoi_top:nlevsoi_root) {
+  if (i == nlevsoi_top) {
+    # soil_frac_bottom[i - nlevsoi_top + 1] = soil_thickness[i]*(1 - frac_bound_soil_top)/(z2_TEMIR - z1_TEMIR)
+    soil_frac_bottom[i - nlevsoi_top + 1] = (soil_thickness[i] - soil_thickness_bound_top)/(z2_TEMIR - z1_TEMIR)
+  } else if (i == nlevsoi_root) {
+    # soil_frac_bottom[i - nlevsoi_top + 1] = soil_thickness[i]*frac_bound_soil_root/(z2_TEMIR - z1_TEMIR)
+    soil_frac_bottom[i - nlevsoi_top + 1] = soil_thickness_bound_root/(z2_TEMIR - z1_TEMIR)
+  }  else {
+    soil_frac_bottom[i - nlevsoi_top + 1] = soil_thickness[i]/(z2_TEMIR - z1_TEMIR)
+  }
+}
+#soil_frac_bottom = matrix(rep(soil_frac_bottom, each = length(pftname)), nrow = length(pftname), byrow = FALSE)
+soil_frac_root = matrix(0, nrow=1, ncol=(nlevsoi_root))
+for (i in 1:nlevsoi_root) {
+  if (i < nlevsoi_root) {
+    soil_frac_root[i] = soil_thickness[i]/z2_TEMIR
+  } else {
+    # soil_frac_root[i] = soil_thickness[i]*frac_bound_soil_root/z2_TEMIR
+    soil_frac_root[i] = soil_thickness_bound_root/z2_TEMIR
+  }
+}     
+#soil_frac_root = matrix(rep(soil_frac_root, each = length(pftname)), nrow = length(pftname), byrow = FALSE)
+                         
+# Fraction of roots in TEMIR top soil layer:
+# fraction_in_top = apply(root_frac[, 1:(nlevsoi_top-1)], 1, sum) + root_frac[,nlevsoi_top] * frac_bound_root
+fraction_in_top = apply(root_frac[, 1:(nlevsoi_top-1)], 1, sum) + root_frac_bound
 
-# Calculate bulk soil parameters by PFT for single soil column:
-subfn = 'bulk_soil_PFT_2000.RData'
+# Calculate soil parameters for single and two-layer soil column:
+# subfn = 'bulk_soil_PFT_2000.RData'
+subfn = 'soil_par_CLM_2000.RData'
 filename = paste0(processed_surf_data_dir, subfn)
 
 if (length(dir(path=processed_surf_data_dir, pattern=subfn)) == 0) {
-   # Root zone bulk saturated volumetric water content (0-1), Clapp and Homberger parameter, saturated soil matric potential (mm), percent of sand, clay and organic matter fraction:
-   THETA_SAT_BULK = array(NaN, dim=c(length(LON_CLM), length(LAT_CLM), length(pftname)))
-   B_PSI_BULK = array(NaN, dim=c(length(LON_CLM), length(LAT_CLM), length(pftname)))
-   PSI_SAT_BULK = array(NaN, dim=c(length(LON_CLM), length(LAT_CLM), length(pftname)))
-   PCT_SAND_BULK = array(NaN, dim=c(length(LON_CLM), length(LAT_CLM), length(pftname)))
-   PCT_CLAY_BULK = array(NaN, dim=c(length(LON_CLM), length(LAT_CLM), length(pftname)))
-   OM_FRAC_BULK = array(NaN, dim=c(length(LON_CLM), length(LAT_CLM), length(pftname)))
+   # Saturated volumetric water content (0-1), Clapp and Homberger parameter, saturated soil matric potential (mm) for single and two-layer soil column:
+   THETA_SAT_BULK = array(NaN, dim=c(length(LON_CLM), length(LAT_CLM)))
+   B_PSI_BULK = array(NaN, dim=c(length(LON_CLM), length(LAT_CLM)))
+   PSI_SAT_BULK = array(NaN, dim=c(length(LON_CLM), length(LAT_CLM)))
+   # The following code is found to be redundant
+   # PCT_SAND_BULK = array(NaN, dim=c(length(LON_CLM), length(LAT_CLM), length(pftname)))
+   # PCT_CLAY_BULK = array(NaN, dim=c(length(LON_CLM), length(LAT_CLM), length(pftname)))
+   # OM_FRAC_BULK = array(NaN, dim=c(length(LON_CLM), length(LAT_CLM), length(pftname)))
+   THETA_SAT_BULK_TOP = array(NaN, dim=c(length(LON_CLM), length(LAT_CLM)))
+   B_PSI_BULK_TOP = array(NaN, dim=c(length(LON_CLM), length(LAT_CLM)))
+   PSI_SAT_BULK_TOP = array(NaN, dim=c(length(LON_CLM), length(LAT_CLM)))
+   THETA_SAT_BULK_BOTTOM = array(NaN, dim=c(length(LON_CLM), length(LAT_CLM)))
+   B_PSI_BULK_BOTTOM = array(NaN, dim=c(length(LON_CLM), length(LAT_CLM)))
+   PSI_SAT_BULK_BOTTOM = array(NaN, dim=c(length(LON_CLM), length(LAT_CLM)))
    for (i in 1:length(LON_CLM)) {
       if (i/10 == floor(i/10)) print(paste0('Calculating bulk soil parameters for lon = ', as.character(LON_CLM[i]), '...'), quote=FALSE)
       for (j in 1:length(LAT_CLM)) {
-         for (ipft in 1:length(pftname)) {
-            THETA_SAT_BULK[i,j,ipft] = sum(theta_sat_xyz[i,j,]*root_frac[ipft,], na.rm=TRUE)
-            B_PSI_BULK[i,j,ipft] = sum(b_psi_xyz[i,j,]*root_frac[ipft,], na.rm=TRUE)
-            PSI_SAT_BULK[i,j,ipft] = sum(psi_sat_xyz[i,j,]*root_frac[ipft,], na.rm=TRUE)
-            PCT_SAND_BULK[i,j,ipft] = sum(PCT_SAND[i,j,]*root_frac[ipft,], na.rm=TRUE)
-            PCT_CLAY_BULK[i,j,ipft] = sum(PCT_CLAY[i,j,]*root_frac[ipft,], na.rm=TRUE)
-            OM_FRAC_BULK[i,j,ipft] = sum(om_frac[i,j,]*root_frac[ipft,], na.rm=TRUE)
-         }
+            THETA_SAT_BULK[i,j] = sum(theta_sat_xyz_root[i,j,]*soil_frac_root, na.rm=TRUE)
+            B_PSI_BULK[i,j] = sum(b_psi_xyz_root[i,j,]*soil_frac_root, na.rm=TRUE)
+            PSI_SAT_BULK[i,j] = sum(psi_sat_xyz_root[i,j,]*soil_frac_root, na.rm=TRUE)
+            #PCT_SAND_BULK[i,j,ipft] = sum(PCT_SAND[i,j,]*root_frac[ipft,], na.rm=TRUE)
+            #PCT_CLAY_BULK[i,j,ipft] = sum(PCT_CLAY[i,j,]*root_frac[ipft,], na.rm=TRUE)
+            #OM_FRAC_BULK[i,j,ipft] = sum(om_frac[i,j,]*root_frac[ipft,], na.rm=TRUE)
+            THETA_SAT_BULK_TOP[i,j] = sum(theta_sat_xyz_top[i,j,]*soil_frac_top, na.rm=TRUE)
+            B_PSI_BULK_TOP[i,j] = sum(b_psi_xyz_top[i,j,]*soil_frac_top, na.rm=TRUE)
+            PSI_SAT_BULK_TOP[i,j] = sum(psi_sat_xyz_top[i,j,]*soil_frac_top, na.rm=TRUE)
+            THETA_SAT_BULK_BOTTOM[i,j] = sum(theta_sat_xyz_bottom[i,j,]*soil_frac_bottom, na.rm=TRUE)
+            B_PSI_BULK_BOTTOM[i,j] = sum(b_psi_xyz_bottom[i,j,]*soil_frac_bottom, na.rm=TRUE)
+            PSI_SAT_BULK_BOTTOM[i,j] = sum(psi_sat_xyz_bottom[i,j,]*soil_frac_bottom, na.rm=TRUE)
       }
    }
    exist_bulk_soil = TRUE
-   save(list=c('THETA_SAT_BULK', 'B_PSI_BULK', 'PSI_SAT_BULK', 'PCT_SAND_BULK', 'PCT_CLAY_BULK', 'OM_FRAC_BULK', 'LON_CLM', 'LAT_CLM', 'pftname', 'pftnum', 'exist_bulk_soil'), file=filename)
+   save(list=c('THETA_SAT_BULK', 'THETA_SAT_BULK_TOP', 'THETA_SAT_BULK_BOTTOM', 'B_PSI_BULK', 'B_PSI_BULK_TOP', 'B_PSI_BULK_BOTTOM', 'PSI_SAT_BULK', 'PSI_SAT_BULK_TOP', 'PSI_SAT_BULK_BOTTOM', 'LON_CLM', 'LAT_CLM', 'pftname', 'pftnum', 'exist_bulk_soil'), file=filename)
 } else {
    if (length(ls(pattern='exist_bulk_soil')) == 0) {
       print('Loading bulk soil parameters...', quote=FALSE)
@@ -344,7 +433,7 @@ PHIS = ncvar_get(nc, 'PHIS')
 nc_close(nc)
 
 # Check if resolution of meteorological fields (GEOS-FP or MERRA2) matches that of TEMIR model:
-if (!identical(as.numeric(lon_met),as.numeric(lon)) | !identical(head(as.numeric(lat_met),-1)[-1], head(as.numeric(lat),-1)[-1])) stop('Model resolution does not match that of input meteorological data!')
+#if (!identical(as.numeric(lon_met),as.numeric(lon)) | !identical(head(as.numeric(lat_met),-1)[-1], head(as.numeric(lat),-1)[-1])) stop('Model resolution does not match that of input meteorological data!')
 
 # Compute areas of grid cells [km^2]:
 # Newly added. (Tai, Feb 2018)
@@ -387,21 +476,43 @@ if (!file.exists(filename)) {
    # PFT_frac = sp.regrid(spdata=PCT_PFT/100, lon.in=LON_CLM, lat.in=LAT_CLM, lon.out=lon, lat.out=lat)
    PCT_PFT_GRID = PCT_PFT*array(LANDFRAC_PFT, dim=c(dim(LANDFRAC_PFT), dim(PCT_PFT)[3]))
    PFT_frac = sp.regrid(spdata=PCT_PFT_GRID/100, lon.in=LON_CLM, lat.in=LAT_CLM, lon.out=lon, lat.out=lat)
+   # However, the above regridding algorithm still suffers from the inability to resolve within-grid cell land-sea division, thus leading to inaccuracy in the regridded PFT fraction. The suggested algorithm below (Ma, Sep 2019) is a possible but imperfect solution.
+   # PCT_PFT_regrid = sp.regrid(spdata=PCT_PFT, lon.in=LON_CLM, lat.in=LAT_CLM, lon.out=lon, lat.out=lat)
+   # PFT_frac = PCT_PFT_regrid*array(FRLAND, dim=c(dim(FRLAND), dim(PCT_PFT_regrid)[3]))/100
+   # rm(PCT_PFT_regrid)
    
    print('Regridding theta_sat, theta_sat0, b_psi, psi_sat, soil albedo...', quote=FALSE)
-   # Saturated volumetric water content by PFT (0-1):
-   theta_sat_PFT = sp.regrid(spdata=zero.to.NaN(THETA_SAT_BULK), lon.in=LON_CLM, lat.in=LAT_CLM, lon.out=lon, lat.out=lat)
-   theta_sat_PFT = NaN.to.zero(theta_sat_PFT)
-   # Saturated volumetric water content of top soil (0-1):
-   theta_sat0 = sp.regrid(spdata=zero.to.NaN(THETA_SAT_TOP), lon.in=LON_CLM, lat.in=LAT_CLM, lon.out=lon, lat.out=lat)
-   theta_sat0 = NaN.to.zero(theta_sat0)
-   # Clapp and Homberger parameter by PFT:
-   b_psi_PFT = sp.regrid(spdata=zero.to.NaN(B_PSI_BULK), lon.in=LON_CLM, lat.in=LAT_CLM, lon.out=lon, lat.out=lat)
-   b_psi_PFT = NaN.to.zero(b_psi_PFT)
-   # Saturated soil matric potential by PFT (mm):
+   # Saturated volumetric water content (0-1):
+   theta_sat_bulk = sp.regrid(spdata=zero.to.NaN(THETA_SAT_BULK), lon.in=LON_CLM, lat.in=LAT_CLM, lon.out=lon, lat.out=lat)
+   theta_sat_bulk = NaN.to.zero(theta_sat_bulk)
+   # Saturated volumetric water content of top soil (0-1): (variable unused LEGACY)
+   # theta_sat0 = sp.regrid(spdata=zero.to.NaN(THETA_SAT_TOP), lon.in=LON_CLM, lat.in=LAT_CLM, lon.out=lon, lat.out=lat)
+   # theta_sat0 = NaN.to.zero(theta_sat0)
+   # Clapp and Homberger parameter:
+   b_psi_bulk = sp.regrid(spdata=zero.to.NaN(B_PSI_BULK), lon.in=LON_CLM, lat.in=LAT_CLM, lon.out=lon, lat.out=lat)
+   b_psi_bulk = NaN.to.zero(b_psi_bulk)
+   # Saturated soil matric potential (mm):
    # It is always negative, so can't use the "zero.to.Nan" function in the same way... (fixed by Tai on 25 Oct 2017)
-   psi_sat_PFT = -sp.regrid(spdata=zero.to.NaN(-PSI_SAT_BULK), lon.in=LON_CLM, lat.in=LAT_CLM, lon.out=lon, lat.out=lat)
-   psi_sat_PFT = NaN.to.zero(psi_sat_PFT)
+   psi_sat_bulk = -sp.regrid(spdata=zero.to.NaN(-PSI_SAT_BULK), lon.in=LON_CLM, lat.in=LAT_CLM, lon.out=lon, lat.out=lat)
+   psi_sat_bulk = NaN.to.zero(psi_sat_bulk)
+   # Saturated volumetric water content in top soil layer (0-1):
+   theta_sat_bulk_top = sp.regrid(spdata=zero.to.NaN(THETA_SAT_BULK_TOP), lon.in=LON_CLM, lat.in=LAT_CLM, lon.out=lon, lat.out=lat)
+   theta_sat_bulk_top = NaN.to.zero(theta_sat_bulk_top)
+   # Clapp and Homberger parameter in top soil layer:
+   b_psi_bulk_top = sp.regrid(spdata=zero.to.NaN(B_PSI_BULK_TOP), lon.in=LON_CLM, lat.in=LAT_CLM, lon.out=lon_met, lat.out=lat_met)
+   b_psi_bulk_top = NaN.to.zero(b_psi_bulk_top)
+   # Saturated soil matric potential in top soil layer (mm):
+   psi_sat_bulk_top = -sp.regrid(spdata=zero.to.NaN(-PSI_SAT_BULK_TOP), lon.in=LON_CLM, lat.in=LAT_CLM, lon.out=lon_met, lat.out=lat_met)
+   psi_sat_bulk_top = NaN.to.zero(psi_sat_bulk_top)
+   # Saturated volumetric water content bottom soil layer (0-1):
+   theta_sat_bulk_bottom = sp.regrid(spdata=zero.to.NaN(THETA_SAT_BULK_BOTTOM), lon.in=LON_CLM, lat.in=LAT_CLM, lon.out=lon, lat.out=lat)
+   theta_sat_bulk_bottom = NaN.to.zero(theta_sat_bulk_bottom)
+   # Clapp and Homberger parameter in bottom soil layer:
+   b_psi_bulk_bottom = sp.regrid(spdata=zero.to.NaN(B_PSI_BULK_BOTTOM), lon.in=LON_CLM, lat.in=LAT_CLM, lon.out=lon_met, lat.out=lat_met)
+   b_psi_bulk_bottom = NaN.to.zero(b_psi_bulk_bottom)
+   # Saturated soil matric potential in bottom soil layer (mm):
+   psi_sat_bulk_bottom = -sp.regrid(spdata=zero.to.NaN(-PSI_SAT_BULK_BOTTOM), lon.in=LON_CLM, lat.in=LAT_CLM, lon.out=lon_met, lat.out=lat_met)
+   psi_sat_bulk_bottom = NaN.to.zero(psi_sat_bulk_bottom)
    # Soil albedo:
    # 3rd dim = [dry/vis, dry/nir, saturated/vis, saturated/nir]
    soil_albedo = sp.regrid(spdata=zero.to.NaN(SOIL_ALBEDO), lon.in=LON_CLM, lat.in=LAT_CLM, lon.out=lon, lat.out=lat)
@@ -413,7 +524,7 @@ if (!file.exists(filename)) {
    
    exist_regrid = TRUE
    
-   save(list=c('LAI_mon_PFT', 'SAI_mon_PFT', 'PFT_frac', 'theta_sat_PFT', 'b_psi_PFT', 'psi_sat_PFT', 'soil_color', 'soil_albedo', 'grid_area', 'lon', 'lat', 'pftname', 'pftnum', 'exist_regrid'), file=filename)
+   save(list=c('LAI_mon_PFT', 'SAI_mon_PFT', 'PFT_frac', 'theta_sat_bulk', 'b_psi_bulk', 'psi_sat_bulk', 'theta_sat_bulk_top', 'b_psi_bulk_top', 'psi_sat_bulk_top', 'theta_sat_bulk_bottom', 'b_psi_bulk_bottom', 'psi_sat_bulk_bottom', 'soil_color', 'soil_albedo', 'grid_area', 'lon', 'lat', 'pftname', 'pftnum', 'exist_regrid'), file=filename)
    
 } else {
    if (length(ls(pattern='exist_regrid')) == 0) {
@@ -595,8 +706,6 @@ if (!exist_LAI_data) {
 ### Load hourly surface ozone concentration field:
 ################################################################################
 
-# Moved to this file from "execution_vX.Y.R" (Tai, Feb 2019):
-
 if (O3_damage_flag & !O3_fixed_flag) {
    
    # Vector of simulation years:
@@ -662,21 +771,21 @@ if (!is.null(drydep_scheme)) {
       nc = nc_open(filename)
       # Mapping from CLM landtype to Wesely dry deposition landtype
       WESELY_MAPPING = ncvar_get(nc, 'IDEPB')
-      # RCLO
+      # Lower canopy resistance for O3
       RCLO_table = ncvar_get(nc, 'IRCLO')
-      # RCLS
+      # Lower canopy resistance for SO2
       RCLS_table = ncvar_get(nc, 'IRCLS')
-      # RGSO
+      # Ground resistance for O3
       RGO_table = ncvar_get(nc, 'IRGSO')
-      # RGS
+      # Ground surface resistance
       RGS_table = ncvar_get(nc, 'IRGSS')
-      # RI
+      # Internal resistance
       RI_table = ncvar_get(nc, 'IRI')
-      # RLU
+      # Cuticular resistance
       RLU_table = ncvar_get(nc, 'IRLU')
-      # RAC
+      # In-canopy aerodynamic resistance
       RAC_table = ncvar_get(nc, 'IRAC')
-      # DRYCOEFF
+      # Polynomial coefficients for dry deposition
       DRYCOEFF_table = ncvar_get(nc, 'DRYCOEFF')
       
       nc_close(nc)
@@ -688,6 +797,8 @@ if (!is.null(drydep_scheme)) {
 ################################################################################
 ### Zhang dry deposition module constants:
 ################################################################################
+
+# Parameters taken from  Table 1 in Zhang et al. (2003)
 
 if (!is.null(drydep_scheme)) {
    
@@ -701,35 +812,35 @@ if (!is.null(drydep_scheme)) {
       nc = nc_open(filename)
       # Mapping from CLM landtype to Wesely dry deposition landtype
       mapping_TEMIR = ncvar_get(nc, 'mapping_TEMIR')
-      # b_r for g(PAR)
+      # Empirical light response coefficient for stomatal resistance
       b_rs = ncvar_get(nc, 'b_rs')
-      # b_vpd for g(VPD)
+      # VPD empirical constant (kPa^-1) for g(VPD)
       b_vpd = ncvar_get(nc, 'bvpd')
-      # psi_max for g(psi)
+      # Maximum leaf water potenetial
       psi_max = ncvar_get(nc, 'psi_c1')
-      # psi_max for g(psi)
+      # Minimum leaf water potenetial
       psi_min = ncvar_get(nc, 'psi_c2')
-      # r_cut_dO
+      # Reference values for dry cuticle resistance
       r_cut_dO = ncvar_get(nc, 'Rcutd0_O3')
-      # r_cut_WO
+      # Reference values for wet cuticle resistance
       r_cut_wO = ncvar_get(nc, 'Rcutw0_O3')
-      # rg_o
+      # Ground resistance for O3
       rg_o = ncvar_get(nc, 'Rg_O3')
-      # rg_s for g(PAR)  ### NOTE: based on temperature for some LUC
+      # Ground resistance for SO2
       rg_s = ncvar_get(nc, 'Rgd_SO2')
-      # rst_min
+      # Minimum leaf stomatal resistance
       rst_min = ncvar_get(nc, 'rstmin')
-      # maximum snow depth that the whole canopy is coverred by snow
+      # Maximum snow depth
       sdmax = ncvar_get(nc, 'Sdmax')
-      # maximum temperature for g(T)
+      # Maximum temperature for stomatal opening
       t_max_st = ncvar_get(nc, 'Tmax')
-      # minimum temperature for g(T)
+      # Minimum temperature for stomatal opening
       t_min_st = ncvar_get(nc, 'Tmin')
-      # optimum temperature for g(T)
+      # Optimum temperature for stomtatl opening
       t_opt_st = ncvar_get(nc, 'Topt')
-      # in-canopy maximum aerodynamic resistance
+      # In-canopy maximum aerodynamic resistance
       Rac0_min = ncvar_get(nc, 'Rac0_min')
-      # in-canopy minimum aerodynamic resistance
+      # In-canopy minimum aerodynamic resistance
       Rac0_max = ncvar_get(nc, 'Rac0_max')
       
       nc_close(nc)

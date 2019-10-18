@@ -224,7 +224,7 @@ r.cut.zhang = function(rcut0, T.c, L, is.wet, rh, ustar){
    # Base cuticular resistance "r.cut0" (s m^-1), surface temperature "T.c" (degC), Leaf area index "L" (m^2 m^-2), "is.wet = TRUE" canopy is wet
    # Relative humidity "rh", friction velocity "ustar"  (m/s)
    r.cut = if (is.wet) rcut0 * ustar^-1 * L^-0.5 else r.cut = rcut0 * exp(-0.03 * rh) * L^-0.25 * ustar^-1
-   r.cut = if (T.c < -1) r.cut * min(2, exp(0.2 * (-1 - T.c)))
+   r.cut = if (T.c < -1) r.cut * min(2, exp(0.2 * (-1 - T.c))) else r.cut
    return(r.cut)
 }
 
@@ -400,7 +400,7 @@ f_drydep_Zhang = function(rho = 0, T.s, H = 0, z0 = 0, cz =0, rsmin = 0, r_s=NUL
    
    # Prevent overestimation of r_cut for sparsely vegetated/snow-buried places
    LSAI = L + SAI
-   r_cut = if (LSAI < 0.5) 1E7
+   r_cut = if (LSAI < 0.5) 1E7 else r_cut
    
    ## Aerodynamic resistance
    if (!use_temir_ra) {

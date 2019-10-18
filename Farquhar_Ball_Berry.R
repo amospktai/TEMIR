@@ -924,8 +924,8 @@ f_canopy_photosyn = function(c_a, e_a, phi_sun, phi_sha, T_v=298.15, P_atm=10132
 
 # Soil water stress function (0 to 1):
 # This is to be applied to V_cmax, R_d and minimum stomatal conductance (b) when calculating photosynthesis.
-f_water_stress = function(soil_wetness=NULL, theta_w=NULL, theta_sat=NULL, psi_sat, b_psi, psi_c, psi_o, multilayer=FALSE) {
-    # Soil wetness (i.e. % saturation): soil_wetness
+f_water_stress = function(soil_wetness=NULL, soil_wetness_top=NULL, soil_wetness_bottom=NULL, theta_w=NULL, theta_sat=NULL, psi_sat, b_psi, psi_sat_top, b_psi_top, psi_sat_bottom, b_psi_bottom, psi_c, psi_o, root_frac_in_top, multilayer) {
+  # Soil wetness (i.e. % saturation): soil_wetness
     # Volumetric soil water content (fraction): theta_w
     # Saturated volumetric water content (fraction): theta_sat
     # Either soil_wetness or (theta_w, theta_sat) have to be specified.
@@ -935,10 +935,28 @@ f_water_stress = function(soil_wetness=NULL, theta_w=NULL, theta_sat=NULL, psi_s
     # Soil matric potential when stomata are fully closed (mm): psi_c
     # Soil matric potential when stomata are fully opened (mm): psi_o
     # We assume an ice-free soil. The capacity to consider ice is under development.
-    if (multilayer) {
+    if (multilayer == 'multilayer') {
         # A multilayer soil column model to calculate soil physics is under development and not available at the moment.
         stop('Multilayer model is not available in the current version.')
-    } else {
+    } else if (multilayer == 'two-layer') {
+        if (is.null(soil_wetness_bottom)) soil_wetness_bottom = theta_w/theta_sat
+        if (is.null(soil_wetness_top)) soil_wetness_top = theta_w/theta_sat
+        soil_wetness_bottom = max(c(0.01, soil_wetness_bottom), na.rm=TRUE)
+        soil_wetness_top = max(c(0.01, soil_wetness_top), na.rm=TRUE)
+        # We use a bulk parameterization for soil aggregate root zone.
+        psi = max(c(psi_c, psi_sat_bottom*soil_wetness_bottom^-b_psi_bottom), na.rm=TRUE)
+        # Soil matric potential of top soil layer
+        psi_top = max(c(psi_c, psi_sat_top*soil_wetness_top^-b_psi_top), na.rm=TRUE)
+        # Plant wilting factor (bulk):
+        wilt_factor = min(c(max(c(0, (psi_c - psi)/(psi_c - psi_o)), na.rm=TRUE), 1), na.rm=TRUE)
+        # Plant wilting factor (top soil layer):
+        wilt_factor_top = min(c(max(c(0, (psi_c - psi_top)/(psi_c - psi_o)), na.rm=TRUE), 1), na.rm=TRUE)
+        # Multiply by a scaling factor for match multilayer model results. It is set to be one for now.
+        #gamma = 1
+        #beta_t = wilt_factor*gamma
+        beta_t = wilt_factor_top * root_frac_in_top + wilt_factor * (1 - root_frac_in_top)
+        return(beta_t)
+    } else if (multilayer == 'bulk') {
         if (is.null(soil_wetness)) soil_wetness = theta_w/theta_sat
         soil_wetness = max(c(0.01, soil_wetness), na.rm=TRUE)
         # We use a bulk parameterization for soil aggregate root zone.

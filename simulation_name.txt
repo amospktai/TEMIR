@@ -1,9 +1,0 @@
-
-This is a dummy file indicating the name of the simulation directory, which should also hold:
-- this file
-- execution_v*.R
-- input_TEMIR_*.R
-- find_hist_stat.R
-- hist_data/
-- temp_data/
-

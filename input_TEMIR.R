@@ -5,20 +5,34 @@
 
 # Computing environment:
 
-# Use multiple cores?
-multicore_flag = FALSE
-
 # Run in cluster environment (i.e., not on personal computer)?
 cluster_flag = FALSE
 
 # Number of cores to use:
 # This will be overwritten by system-dependent setting if "cluster_flag=TRUE".
 # Use parallel::detectCores() for all available cores
-n_core = detectCores()
+n_core = parallel::detectCores()
 
 # Debugging mode?
-# If turned on, no output data will be saved externally. Debugging mode should be run only in an R console environment (i.e., not via a UNIX command line), and is convenient for single-site simulation.
+# If turned on, no output data will be saved externally. Debugging mode should be run only in an R console environment (i.e., not via a UNIX command line), and best for single-site simulation.
 debug_flag = TRUE
+
+################################################################################
+### Directories:
+################################################################################
+
+# Required directories:
+
+# Set TEMIR directory:
+TEMIR_dir = '~/Dropbox/TGABI/TEMIR/'
+# Set source code directory:
+code_dir = paste0(TEMIR_dir, 'code_v1.0/')
+# Set meteorological data directory:
+met_data_dir = paste0(TEMIR_dir, 'TEMIR_inputs/met_data/GEOS_2x2.5.d/')
+# Set PFT and surface data directory:
+surf_data_dir = paste0(TEMIR_dir, 'TEMIR_inputs/clm2_data/')
+# Set processed PFT and surface output directory:
+processed_surf_data_dir = paste0(TEMIR_dir, 'TEMIR_inputs/processed_surf_data/')
 
 ################################################################################
 ### Model configuration:
@@ -47,29 +61,78 @@ end_date = 20090602
 # If set true, temporary data within 10 days before the start date are needed.
 continue_flag = FALSE
 
-# Specify lon/lat for a single site or a given region (including global), or specify site ID if simulation is for a FLUXNET site.
+################################################################################
 
-# Single site or not?
+### Simulation site / region ###
+# Specify lon/lat for a single site or a given region (including global), or specify site ID if simulation is for a FLUXNET site.
+# Single site?
 single_site_flag = TRUE
 
-# Running FLUXNET site?
+# FLUXNET site?
 FLUXNET_site_flag = FALSE
-# Running simulation with FLUXNET met/canopy data?
-FLUXNET_flag = FALSE
-# Specify FLUXNET site ID (ignored if FLUXNET_site_flag=FALSE):
-FLUXNET_site_id = "US-Ha1"
-# # Saving FLUXNET meteorological data as ncdf? NOT SUPPORTED YET
-# save_FLUXNET_data_flag = TRUE
 
-# Specify location (lon, lat) of local site of interest:
-if (single_site_flag && !FLUXNET_site_flag) {
-   lon_sim = 8.4104
-   lat_sim = 47.2102
+if (single_site_flag) {
+   if (FLUXNET_site_flag) {
+      # Set FLUXNET directory:
+      FLUXNET_dir = paste0(TEMIR_dir, 'TEMIR_inputs/FLUXNET/')
+      
+      # Running simulation with FLUXNET meteorological/canopy data?
+      FLUXNET_flag = FALSE
+      # Specify FLUXNET site ID :
+      FLUXNET_site_id = "US-Ha1"
+      
+   } else {
+      # Specify location (lon, lat) of local site of interest:
+      lon_sim = 8.4104
+      lat_sim = 47.2102
+   }
 } else {
    # Specify range of lon/lat of a given region of interest:
    lon_sim = c(-180, 180)
    lat_sim = c(-90, 90)
-}
+} 
+
+################################################################################
+
+### Simulation vegetation type ###
+
+# Which plant function type (PFT) to simulate?
+# Default PFTs follow the classification used in Community Land Model version 4.5 (CLM4.5) shown in PFT_df below
+# Please refer to each PFT by its PFT number quote in the first column of PFT_df
+sim_PFT = 1:15
+
+# Default CLM4.5 PFT dataframe:
+# 1st col = PFT number; 2nd col = PFT description
+PFT_df = `colnames<-`(rbind.data.frame(
+   # PFT information
+   c(0, 'not_vegetated'),
+   c(1, 'needleleaf_evergreen_temperate_tree'),
+   c(2, 'needleleaf_evergreen_boreal_tree'),
+   c(3, 'needleleaf_deciduous_boreal_tree'),
+   c(4, 'broadleaf_evergreen_tropical_tree'),
+   c(5, 'broadleaf_evergreen_temperate_tree'),
+   c(6, 'broadleaf_deciduous_tropical_tree'),
+   c(7, 'broadleaf_deciduous_temperate_tree'),
+   c(8, 'broadleaf_deciduous_boreal_tree'),
+   c(9, 'broadleaf_evergreen_shrub'),
+   c(10, 'broadleaf_deciduous_temperate_shrub'),
+   c(11, 'broadleaf_deciduous_boreal_shrub'),
+   c(12, 'c3_arctic_grass'),
+   c(13, 'c3_non-arctic_grass'),
+   c(14, 'c4_grass'),
+   c(15, 'c3_crop'),
+   c(16, 'c3_irrigated'),
+   c(17, 'corn'),
+   c(18, 'irrigated_corn'),
+   c(19, 'spring_temperate_cereal'),
+   c(20, 'irrigated_spring_temperate_cereal'),
+   c(21, 'winter_temperate_cereal'),
+   c(22, 'irrigated_winter_temperate_cereal'),
+   c(23, 'soybean'),
+   c(24, 'irrigated_soybean'),
+   # Dataframe settings
+   stringsAsFactors = FALSE), c('PFT_number', 'PFT_description'))
+
 
 ################################################################################
 
@@ -89,16 +152,19 @@ Theta_PSII = 0.70
 # Stomatal conductance scheme: Farquhar-Ball-Berry model ('FBB') or Medlyn model ('Medlyn')
 gs_scheme = 'FBB'
 
-# Use simplified radiative trasnfer model?
-# If not, the default model with two-stream approximation and light exctinction by both leaves and stems will be used to calculate variables "phi_sun", "phi_sha", "LAI_sun",  "LAI_sha" and "K_b", among others.
-# If so, these five variables will be replaced by values from a simplified model assuming spherical leaf orientation and extinction by leaves only, to be consistent with Zhang et al. [2003] dry deposition scheme.
-simple_radiation_flag = FALSE
+# Which radiative trasnfer model? ('two-stream', 'Beer') 
+# 'two-stream' : the default model with two-stream approximation and light exctinction by both leaves and stems will be used to calculate variables "phi_sun", "phi_sha", "LAI_sun",  "LAI_sha" and "K_b", among others.
+# 'Beer' : these five variables will be replaced by values from a simplified model assuming spherical leaf orientation and extinction by leaves only, to be consistent with Zhang et al. [2003] dry deposition scheme. 
+radiative_scheme = 'two-stream'
 
 # Use Monin-Obukhov theory to infer temperature and humidity in canopy air?
 # If not, temperature and humidity at 2 m above displacement height will be used as proxies for temperature and humidity in canopy air.
-# NOTE: if FLUXNET_flag=TRUE (so FLUXNET data are used for simulation), Monin_Obukhov_flag=FALSE by default, and what is set here will be ignored.
-# NOTE: This method always uses the default TEMIR aerodynamic conductance scheme, never the scheme used in "drydep_toolbox.R"; "use_TEMIR_ga_flag" below will be set TRUE if Monin_Obukhov_flag=TRUE.
-Monin_Obukhov_flag = FALSE
+# NOTE: if FLUXNET_flag=TRUE (so FLUXNET data are used for simulation), infer_canopy_met_flag=FALSE by default, and what is set here will be ignored.
+# NOTE: This method always uses the default TEMIR aerodynamic conductance scheme, never the scheme used in "drydep_toolbox.R", please see dry deposition section below if concerned
+infer_canopy_met_flag = FALSE
+
+# Soil layer option for computing soil water stress: ('bulk' or 'two-layer')
+soil_layer_scheme = 'two-layer'
 
 ################################################################################
 
@@ -108,21 +174,22 @@ Monin_Obukhov_flag = FALSE
 # Set drydep_scheme=NULL if dry deposition computation is to be turned off.
 drydep_scheme = NULL
 
-# Use default TEMIR aerodynamic conductance for scalars?
-# If so, the default method in "Monin_Obukhov.R" will be used.
-# If not, the method used in "drydep_toolbox.R" that is consistent with GEOS-Chem (Wesely) and Zhang et al. [2003] dry deposition schemes will be used.
-# Please that this flag will be used for calculating ozone damage as well.
-# If Monin_Obukhov=TRUE, this flag to be set TRUE, overriding what is set here.
-use_TEMIR_ga_flag = TRUE
+# Which aerodynamic conductance for scalars? ('CLM4.5' or 'Zhang')
+# 'CLM4.5' : default method in "Monin_Obukhov.R", as used in Community Land Model v4.5 (CLM4.5)
+# 'Zhang' : method of "drydep_toolbox.R" that is consistent with GEOS-Chem (Wesely) and Zhang et al. [2003] dry deposition schemes
+# NOTE that this flag will be used for calculating ozone damage as well.
+# If infer_canopy_met_flag = TRUE, ga_scheme must be 'CLM4.5'
+ga_scheme = 'CLM4.5'
 
-# Use default TEMIR stomatal conductance?
-# If so, the default method in "Farquhar_Ball_Berry.R" will be used.
-# If not, stomatal conductance is calculated using GEOS-Chem (Wesely) or Zhang et al. [2003] methods depending on "drydep_scheme" set above.
-use_TEMIR_gs_flag = TRUE
+# Which stomatal conductance? ('ecophysiological' or 'semi-empirical')
+# 'ecophysiological' : default method in "Farquhar_Ball_Berry.R", including both "FBB" and "Medlyn"
+# 'semi-empirical' : stomatal conductance calculated using GEOS-Chem (Wesely) or Zhang et al. [2003] methods depending on 'drydep_scheme' set above
+gs_scheme_type = 'ecophysiological'
 
-# Use TEMIR water stress to scale stomatal resistance in Zhang et al. [2003]?
-# If not, water stress follows Zhang et al. [2003] method.
-use_TEMIR_beta_flag = FALSE
+# Which water stress to scale stomatal resistance for Zhang dry deposition scheme if set above? ('CLM4.5' or 'Zhang')
+# 'CLM4.5' : default method in "Farquhar_Ball_Berry.R" for water stress, used in CLM4.5 but adopted to a two-layer soil model
+# 'Zhang' : water stress following Zhang et al. [2003] method
+gs_water_stress_scheme = 'CLM4.5'
 
 # CO2 scaling function for dry deposition velocity calculations:
 CO2_scale_flag = TRUE
@@ -141,8 +208,8 @@ O3_damage_scheme = 'Lombardozzi'
 # For "Sitch" scheme: "high" or "low"
 O3_sensitivity = 'high'
 
-# Use default TEMIR aerodynamic conductance for scalars to calculate O3 flux?
-# Set use_TEMIR_ga_flag in the dry deposition menu above.
+# Which aerodynamic conductance for scalars to calculate O3 flux?
+# Set by ga_scheme in the dry deposition menu above.
 
 # Fixed ozone concentration?
 O3_fixed_flag = FALSE
@@ -211,7 +278,6 @@ if (LAI_data_flag) {
    
 }
 
-################################################################################
 ################################################################################
 
 # Output/history data archiving:

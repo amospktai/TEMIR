@@ -12,7 +12,7 @@ library(readxl) # For reading excel/csv files
 ### Functions:
 ################################################################################
 
-### Function to find time difference between FLUXNET site and model time in UTC ### NOTE : FLUXNET has no daylight saving time therefore use timezone provided in their site information /Users/davidyung/Documents/TEMIR_Sitch_update_personal/FLUXNET/AA-Flx.xlsx
+### Function to find time difference between FLUXNET site and model time in UTC ### NOTE : FLUXNET has no daylight saving time therefore use timezone provided in their site information .../FLUXNET/AA-Flx.xlsx
 # NOTE : NOT NEEDED in v1.1 BUT LEFT FOR INSURANCE 
 if (FALSE) {
    f_FLUXNET_tz_from_UTC = function(date, lon.sim = lon_sim, lat.sim = lat_sim, timezone = FLUXNET_timezone, tz.offline.flag = timezone_offline_flag){
@@ -40,7 +40,6 @@ if (FALSE) {
 }
 
 ################################################################################
-
 ### Function to shift model time to site time using UTC_OFFSET given by FLUXNET
 f_FLUXNET_UTC_2_local = function(FLUXNET.dir, date, site.id, utc.offset = NA, out.utc.offset = FALSE) {
    # Get current FLUXNET site time difference if not known:
@@ -81,13 +80,13 @@ f_FLUXNET_UTC_2_local = function(FLUXNET.dir, date, site.id, utc.offset = NA, ou
 }
 
 ################################################################################
-
 ### Function to check FLUXNET data availability over the simulation days
 f_FLUXNET_date_range = function(FLUXNET.dir, start.or.end.year = c('start', 'end'), whole.date.for.year = c(start_date, end_date), site.id){
    # Get current FLUXNET site:
-   site_info = read_excel(path = paste0(FLUXNET.dir, 'FLUXNET_site_info.xlsx'))
-   site_ind = match(site.id, site_info$SITE_ID)
+   site_info = if (file.exists(paste0(FLUXNET_dir, 'FLUXNET_site_info.xlsx'))) read_excel(path = paste0(FLUXNET_dir, 'FLUXNET_site_info.xlsx')) else read_excel(path = paste0(FLUXNET_dir, 'FLUXNET_site_info.xlsx'))
+   site_ind = match(FLUXNET_site_id, site_info$SITE_ID)
    if (is.na(site_ind)) stop("Invalid FLUXNET Site ID is given!!!")
+   
    # Get current FLUXNET data start and end years:
    if (start.or.end.year == 'start'){
       if (as.numeric(substr(site_info[site_ind,4], start = 8, stop = 11)) <= as.numeric(substr(whole.date.for.year,start = 1, stop = 4))) date_in_range = TRUE else date_in_range = FALSE
@@ -99,25 +98,26 @@ f_FLUXNET_date_range = function(FLUXNET.dir, start.or.end.year = c('start', 'end
 }
 
 ################################################################################
-
 ### Function to find (lon, lat) from site.id
 f_lon_lat_sim_from_FLUXNET = function(FLUXNET.dir, site.id){
    # Get current FLUXNET site:
-   site_info = read_excel(path = paste0(FLUXNET.dir, 'FLUXNET_site_info.xlsx'))
-   site_ind = match(site.id, site_info$SITE_ID)
+   site_info = if (file.exists(paste0(FLUXNET_dir, 'FLUXNET_site_info.xlsx'))) read_excel(path = paste0(FLUXNET_dir, 'FLUXNET_site_info.xlsx')) else read_excel(path = paste0(FLUXNET_dir, 'FLUXNET_site_info.xlsx'))
+   site_ind = match(FLUXNET_site_id, site_info$SITE_ID)
+   
    # Get current FLUXNET site lon lat:
    lon_sim = as.double(site_info[site_ind,7])
    lat_sim = as.double(site_info[site_ind,6])
-   remove(site_info)
+   remove(site_info, site_ind)
    return(list('lon_sim' = lon_sim, 'lat_sim' = lat_sim))
 }
 
 ################################################################################
-
 ### Function to set appropriate FLUXNET data file directory
 f_FLUXNET_file = function(FLUXNET.dir, site.id, hr.part, hourly.data = TRUE){
-   # Read most optimal FLUXNET data for current simulation:
-   # Prioritizes FLUXNET FULLSET than SUBSET 
+   # Read most optimal FLUXNET data for current simulation: ( Prefer FLUXNET FULLSET to SUBSET )
+   ### NOTE : FLUXNET_nrows has extra_row as daylight saving time complicates data selecting in f_FLUXNET_and_Met_grid
+   ###        In summer time, the hour shifted forwards so data is gapfilled with -9999 or duplicated data which needs to be IGNORED
+   ###        In winter time, the hour shifted backwards but as f_FLUXNET_and_Met_grid is coded for 24 hours this shift is overlooked
    if (hourly.data) {
       if (length(file.exists(Sys.glob(paste0(FLUXNET.dir, 'FLX_', site.id, '*', '_FULLSET_H', '*','.csv')))) == 1) {
          data_size = 'FULLSET'
@@ -144,24 +144,17 @@ f_FLUXNET_file = function(FLUXNET.dir, site.id, hr.part, hourly.data = TRUE){
       FLUXNET_nrows = 1
    }
    return(list(filedir = FLUXNET_file, nrows = FLUXNET_nrows))
-   
-   ### NOTE : FLUXNET_nrows has extra_row as daylight saving time complicates data selecting in f_FLUXNET_and_Met_grid
-   ###        In summer time, the hour shifted forwards so data is gapfilled with -9999 or duplicated data which needs to be IGNORED
-   ###        In winter time, the hour shifted backwards but as f_FLUXNET_and_Met_grid is coded for 24 hours this shift is overlooked
 }
 
 ################################################################################
-
 ### Function to count occurrence of logic condition
 num.elem = function(condition) {return(length(which(condition)))}
 
 ################################################################################
-
 ### Function to count get last characters of string
 substrEND = function(x, n) {substr(x, nchar(x)-n+1, nchar(x))}
 
 ################################################################################
-
 ### Function to find row of current date in FLUXNET data
 f_FLUXNET_row_skip = function(FLUXNET.dir, current.date, direction, rangeloc = NA, site.id, FLUXNET.nrows, hourly.data = TRUE) {
    # Get current FLUXNET data and date:
@@ -169,7 +162,7 @@ f_FLUXNET_row_skip = function(FLUXNET.dir, current.date, direction, rangeloc = N
    site_ind = match(site.id, site_info$SITE_ID)
    FLUXNET_data_start_date = as.numeric(substr(site_info[site_ind,"2015_DATA_START"], start = 8, stop = 11))
    FLUXNET_data_end_date = as.numeric(substr(site_info[site_ind, "2015_DATA_END"], start = 8, stop = 11))
-   remove(site_info)
+   remove(site_info, site_ind)
    
    # Skip to current date for FLUXNET data:
    if (hourly.data){
@@ -211,7 +204,6 @@ f_FLUXNET_row_skip = function(FLUXNET.dir, current.date, direction, rangeloc = N
 }
 
 ################################################################################
-
 ### Function to check if FLUXNET data of the site chosen has listed input variables data
 f_FLUXNET_variable_check = function(FLUXNET.dir, FLUXNET.header, var.match.df, site.id){
    # Get current FLUXNET data variables:
@@ -220,14 +212,14 @@ f_FLUXNET_variable_check = function(FLUXNET.dir, FLUXNET.header, var.match.df, s
    counter = 1
    
    # Check FLUXNET variable availability:
-   for (i in seq_along(var.match.df[, "FLUXNET_var_name"])){
-      if ((!is.na(var.match.df[i, "FLUXNET_var_name"])) && (!var.match.df[i, "FLUXNET_var_name"] %in% data_variable)){
-         line1 = paste0('FLUXNET data of site ', site.id, ' does not have variable ', var.match.df[i ,"FLUXNET_var_name"], '.')
-         line2 = paste0('Error resolved by using variable ', var.match.df[i, "TEMIR_var_name"], ' of ', met_name, ' data as substitute.')
+   for (irow in seq_along(var.match.df[, "FLUXNET_var_name"])){
+      if ((!is.na(var.match.df[irow, "FLUXNET_var_name"])) && (!var.match.df[irow, "FLUXNET_var_name"] %in% data_variable)){
+         line1 = paste0('FLUXNET data of site ', site.id, ' does not have variable ', var.match.df[irow ,"FLUXNET_var_name"], '.')
+         line2 = paste0('Error resolved by using variable ', var.match.df[irow, "TEMIR_var_name"], ' of ', met_name, ' data as substitute.')
          print((line1), quote = FALSE)
          print(paste0('    ', line2), quote = FALSE)
          err_output[counter] = paste(line1, line2, sep = " ")
-         var.match.df[i, "FLUXNET_var_name"] = NA
+         var.match.df[irow, "FLUXNET_var_name"] = NA
          counter = counter + 1
       }
    }
@@ -240,7 +232,6 @@ f_FLUXNET_variable_check = function(FLUXNET.dir, FLUXNET.header, var.match.df, s
 }
 
 ################################################################################
-
 ### Function to check if FLUXNET data of the site chosen has listed input variables data
 f_FLUXNET_HH_to_HR = function(FLUXNET.sel.data, method){
    if (method == 'mean') {
@@ -253,9 +244,9 @@ f_FLUXNET_HH_to_HR = function(FLUXNET.sel.data, method){
 }
 
 ################################################################################
-
 ### Function to convert relative humidity to specific humidity
 f_RH_to_SH = function(data.array, ind.lon, ind.lat, M.w = M_w, M.d = M_da, R = R_uni, T.atm, P.atm) {
+   
    # Set lon lat for meteorological fields:
    T_K = T.atm[ind_lon, ind_lat, ]
    P = P.atm[ind_lon, ind_lat, ]
@@ -278,15 +269,14 @@ f_RH_to_SH = function(data.array, ind.lon, ind.lat, M.w = M_w, M.d = M_da, R = R
 }
 
 ################################################################################
-
 ### Function from pressure to sea level pressure in Pa (Barometric law with standard temperature lapse rate) 
 # NOTE : NOT NEEDED IN v1.1
 if (FALSE) {
    f_PA_to_SLP = function(FLUXNET.dir, data.array, M.da = M_da, g = g_E, R = R_uni, T_K = T2M[ind_lon, ind_lat, ], ind.lon = ind_lon, ind.lat = ind_lat){
-      site_info = read_excel(path = paste0(FLUXNET.dir, 'FLUXNET_site_info.xlsx'))
+      site_info = if (file.exists(paste0(FLUXNET_dir, 'FLUXNET_site_info.xlsx'))) read_excel(path = paste0(FLUXNET_dir, 'FLUXNET_site_info.xlsx')) else read_excel(path = paste0(FLUXNET_dir, 'FLUXNET_site_info.xlsx'))
       site_ind = match(FLUXNET_site_id, site_info$SITE_ID)
       Z_surf = as.double(unname(site_info[site_ind,"LOCATION_ELEV"]))
-      remove(site_info)
+      rm(site_info, site_ind)
       # L is standard temperature lapse rate (K/m) in ISA
       if (11000 <= Z_surf && Z_surf < 20000) L = 0.0
       else if (Z_surf < 11000) L = -0.0065
@@ -300,9 +290,9 @@ if (FALSE) {
 }
 
 ################################################################################
-
 ### Function to write FLUXNET data into the site grid of meteorological data
 f_FLUXNET_met_grid = function(FLUXNET.data, TEMIR.variable, FLUXNET.variable, FLUXNET.nrows, dt.hr, st.ind, end.ind, ind.lon, ind.lat, input.var.df, hh.to.hr.flag){
+   
    # Find variable index:
    index = match(TEMIR.variable, input.var.df[, "TEMIR_var_name"])
    
@@ -361,7 +351,6 @@ f_FLUXNET_met_grid = function(FLUXNET.data, TEMIR.variable, FLUXNET.variable, FL
 }
 
 ################################################################################
-
 ### Function for variable agreement between FLUXNET and meteorological data
 f_FLUXNET_unit_convert = function(TEMIR.variable, FLUXNET.variable, FLUXNET.data){
    # Get particular meteorological data:
@@ -374,6 +363,7 @@ f_FLUXNET_unit_convert = function(TEMIR.variable, FLUXNET.variable, FLUXNET.data
    if (any(TEMIR.variable == c('PARDF', 'PARDR'))) data_return = FLUXNET.data[, FLUXNET.variable] * 0.219
    # mm h-1 to kg m^2 s-1:
    if (TEMIR.variable == 'PRECTOT') data_return = FLUXNET.data[, FLUXNET.variable] / 3600
+   # Volumetric soil moisture to soil wetness: done in simulate_IJ (line 365)
    return(data_return)
 }
 
