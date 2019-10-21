@@ -536,7 +536,7 @@ f_simulate_ij = function(IJ) {
                                                 leaf_N_conc=leaf_N_conc, 
                                                 u_leaf=u_leaf, d_leaf=d_leaf, 
                                                 met_cond=met_cond_flag, 
-                                                tol=1e-3)
+                                                tol=1e-3, g1_med=g1_med)
             
             # Total absorbed PAR (W m^-2):
             PAR_tot = phi_sun * LAI_sun + phi_sha * LAI_sha
