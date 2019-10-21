@@ -184,6 +184,8 @@ f_simulate_ij = function(IJ) {
          tau_leaf = taulvis[ipft]
          # Stem transmittance for PAR:
          tau_stem = tausvis[ipft]
+         # Medlyn model parameter:
+         g1_med = g1_med_table[ipft]
          # Fraction of roots in top soil layer:
          root_frac_in_top = fraction_in_top[ipft]
          
