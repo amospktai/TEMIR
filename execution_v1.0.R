@@ -32,18 +32,18 @@ for (idir in seq_along(dir_check)) {
    if (!dir.exists(paths = get(dir_check[idir]))) stop(paste0(dir_check[idir], ' does not exist!'))
 } ; rm(dir_check, idir)
 
-# Print directory paths:
-print(paste0('Simulation directory: ', simulation_dir), quote=FALSE)
-print('Please make sure this is the simulation that you desire!', quote=FALSE) ; cat('\n')
-print(paste0('Code directory: ', code_dir), quote=FALSE)
-print('Please make sure this is the code directory that you desire!', quote=FALSE) ; cat('\n')
-
 # Source input scripts:
 # *** Please make sure the input scripts (e.g., input_TEMIR.R) are in the same simulation directory as this execution script. ***
 input_scripts = list.files(path = simulation_dir, pattern = "^input_")
 for (script in input_scripts) {
    source(file = paste0(simulation_dir, script))
 }
+
+# Print directory paths:
+print(paste0('Simulation directory: ', simulation_dir), quote=FALSE)
+print('Please make sure this is the simulation that you desire!', quote=FALSE); cat('\n')
+print(paste0('Code directory: ', code_dir), quote=FALSE)
+print('Please make sure this is the code directory that you desire!', quote=FALSE); cat('\n')
 
 # Get simulation configuration for saving:
 model_config_vec = setdiff(ls(), ls(pattern = '_dir$'))
@@ -248,8 +248,11 @@ if (cluster_flag) {
    if (is.na(n_core)) n_core = detectCores()
    n_node = as.numeric(Sys.getenv('PBS_NUM_NODES'))
    if (is.na(n_node)) n_node = 1
-   if (n_node > 1) stop('CLM-R cannot be run on multiple nodes!')
+   if (n_node > 1) stop('TEMIR cannot be run on multiple nodes!')
 }
+# For single-site simulation, always use one core only:
+if (single_site_flag) n_core = 1
+# Print number of cores used:
 print(paste0('# of cores used: ', as.character(n_core)), quote=FALSE)
 
 # Continue run:
@@ -531,8 +534,12 @@ for (d in 1:n_day_sim) {
          cl = makeCluster(getOption("cl.cores", n_core))
          parLapply(cl = cl, X = ij, fun=f_simulate_ij)
          stopCluster(cl)
-      } else { mclapply(ij, FUN=f_simulate_ij, mc.cores=n_core) } 
-   } else lapply(ij, FUN=f_simulate_ij)
+      } else {
+         mclapply(ij, FUN=f_simulate_ij, mc.cores=n_core)
+      } 
+   } else {
+      lapply(ij, FUN=f_simulate_ij)
+   }
    print(paste0('Done on ', Sys.time()), quote=FALSE)
    
    if (debug_flag) {
