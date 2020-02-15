@@ -152,7 +152,9 @@ f_stomatal_cond = function(A_n, c_s=NULL, e_s=NULL, c_a=NULL, e_a=NULL, g_b=NULL
                 # put constraints on RH/vpd in MED mode
                 e_vpd = max(e_sat - e_s, 50)*0.001
                 g_s = 1.6*(1 + m/(e_vpd^0.5))*A_n/(c_s/P_atm) + b
+                
             } else {
+                
                 if (is.null(c_a) | is.null(e_a) | is.null(g_b)) stop('All of c_a, e_a and g_b need to be specified.')
                 if (met_cond) g_b = g_b/mol_to_met
                 tmp_c_s = max(c(1e-6, (c_a - (1.4/g_b)*P_atm*A_n)), na.rm=TRUE)
@@ -180,8 +182,8 @@ f_stomatal_cond = function(A_n, c_s=NULL, e_s=NULL, c_a=NULL, e_a=NULL, g_b=NULL
                     c_s = max(c(1e-6, (c_a - (1.4/g_b)*P_atm*A_n)), na.rm=TRUE)
                     gs_roots = quadroot(a=c_s, b=(c_s*(g_b - b) - m*A_n*P_atm), c=(-g_b*(c_s*b + m*A_n*P_atm*e_a/e_sat)))
                     g_s = max(gs_roots, na.rm=TRUE)
-                    
                 }
+                
             }
         }
     } else if (gs_scheme == 'FBB') {
