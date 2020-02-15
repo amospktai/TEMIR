@@ -118,7 +118,7 @@ f_stomatal_cond = function(A_n, c_s=NULL, e_s=NULL, c_a=NULL, e_a=NULL, g_b=NULL
     # 2. If "e_a" (Pa) adn "c_a" (Pa) and "g_b" (umol m^-2 s^-1 or m s^-1) are given, it calculates "g_s" via solving a quadratic equation using:
     #   e_s = (e_a/g_s+e_i/g_b)/(1/g_b+1/g_s)
     #   e_vpd = e_i-e_s
-    #   g_s = 1.6*(1+m/e_vpd^0.5)*A_n*P_atm/c_s
+    #   g_s = 1.6*(1+m/e_vpd^0.5)*A_n*P_atm/c_s + b
     # Medlyn et al. 2011
     
     # Saturation vapor pressure at leaf temperature (Pa):
@@ -151,7 +151,7 @@ f_stomatal_cond = function(A_n, c_s=NULL, e_s=NULL, c_a=NULL, e_a=NULL, g_b=NULL
                
                 # put constraints on RH/vpd in MED mode
                 e_vpd = max(e_sat - e_s, 50)*0.001
-                g_s = 1.6*(1 + m/(e_vpd^0.5))*A_n/(c_s/P_atm)
+                g_s = 1.6*(1 + m/(e_vpd^0.5))*A_n/(c_s/P_atm) + b
             } else {
                 if (is.null(c_a) | is.null(e_a) | is.null(g_b)) stop('All of c_a, e_a and g_b need to be specified.')
                 if (met_cond) g_b = g_b/mol_to_met
