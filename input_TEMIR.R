@@ -10,7 +10,8 @@ cluster_flag = FALSE
 
 # Number of cores to use:
 # This will be overwritten by system-dependent setting if "cluster_flag=TRUE".
-# Use parallel::detectCores() for all available cores
+# Set "n_core = parallel::detectCores()" for all available cores.
+# Set "n_core = 1" for single-site simulations. If "single_site_flag=TRUE", "n_core=1" will be turned on automatically.
 n_core = parallel::detectCores()
 
 # Debugging mode?
@@ -75,12 +76,10 @@ if (single_site_flag) {
    if (FLUXNET_site_flag) {
       # Set FLUXNET directory:
       FLUXNET_dir = paste0(TEMIR_dir, 'TEMIR_inputs/FLUXNET/')
-      
       # Running simulation with FLUXNET meteorological/canopy data?
       FLUXNET_flag = FALSE
       # Specify FLUXNET site ID :
       FLUXNET_site_id = "US-Ha1"
-      
    } else {
       # Specify location (lon, lat) of local site of interest:
       lon_sim = 8.4104
