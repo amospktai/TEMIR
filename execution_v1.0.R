@@ -26,18 +26,18 @@ timestamp()
 # Set simulation directory:
 simulation_dir = paste0(getwd(), '/')
 
-# Check existence of directory paths:
-dir_check = ls(pattern = "_dir$")
-for (idir in seq_along(dir_check)) {
-   if (!dir.exists(paths = get(dir_check[idir]))) stop(paste0(dir_check[idir], ' does not exist!'))
-} ; rm(dir_check, idir)
-
 # Source input scripts:
 # *** Please make sure the input scripts (e.g., input_TEMIR.R) are in the same simulation directory as this execution script. ***
 input_scripts = list.files(path = simulation_dir, pattern = "^input_")
 for (script in input_scripts) {
    source(file = paste0(simulation_dir, script))
 }
+
+# Check existence of directory paths:
+dir_check = ls(pattern = "_dir$")
+for (idir in seq_along(dir_check)) {
+   if (!dir.exists(paths = get(dir_check[idir]))) stop(paste0(dir_check[idir], ' does not exist!'))
+} ; rm(dir_check, idir)
 
 # Print directory paths:
 print(paste0('Simulation directory: ', simulation_dir), quote=FALSE)
