@@ -25,7 +25,7 @@ debug_flag = TRUE
 # Required directories:
 
 # Set TEMIR directory:
-TEMIR_dir = '~/Dropbox/TGABI/TEMIR/'
+TEMIR_dir = '~/Documents/Research/GitHub/TEMIR/'
 # Set source code directory:
 code_dir = paste0(TEMIR_dir, 'code_v1.0/')
 # Set meteorological data directory:
