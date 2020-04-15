@@ -31,7 +31,7 @@ code_dir = paste0(TEMIR_dir, 'code_v1.0/')
 # Set meteorological data directory:
 met_data_dir = paste0(TEMIR_dir, 'TEMIR_inputs/met_data/GEOS_2x2.5.d/')
 # Set PFT and surface data directory:
-surf_data_dir = paste0(TEMIR_dir, 'TEMIR_inputs/clm2_data/')
+surf_data_dir = paste0(TEMIR_dir, 'TEMIR_inputs/surf_data/clm2/')
 # Set processed PFT and surface output directory:
 processed_surf_data_dir = paste0(TEMIR_dir, 'TEMIR_inputs/processed_surf_data/')
 
