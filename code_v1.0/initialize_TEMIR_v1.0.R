@@ -7,7 +7,7 @@
 TEMIR_version = '1.0'
 
 # Set TEMIR directory:
-TEMIR_dir = '~/Dropbox/TGABI/TEMIR/'
+TEMIR_dir = '~/Documents/Research/GitHub/TEMIR/'
 
 # Set simulation parent directory:
 # Users can specify their customized parent directory for their simulations here.
