@@ -11,6 +11,7 @@
 # Oct 2018: Added new "Medlyn" stomatal conductance scheme. (Sun)
 # Feb 2019: Modified the way L_sun and L_sha are defined and calculated. We believe that A_can, R_can and g_can should be scaled up by LAI only, not by LAI + SAI. Therefore, L_sun and L_sha here should be sunlit and shaded leaf area index, not plant area index, but we still consider both LAI and SAI when calculating light extinction. Now they are renamed "LAI_sun" and "LAI_sha" and "LAI_sun" has to taken explicitly from canopy radiative transfer model. (Tai)
 # Feb 2019: Now modified such that "g_ah" (aerodynamic conductance for heat, umol m^-2 s^-1 or m s^-1) is used instead of "g_am". (Tai, Feb 2019)
+# Apr 2020: Added "f_Kn_Kb" to scale "R_d25" in f_leaf_photosyn(). Not sure if "R_d25" needs to be adjusted for daylength in this case. (Tai, Apr 2020)
 
 ################################################################################
 ### Functions:
@@ -288,7 +289,8 @@ f_leaf_photosyn = function(c_i, phi, T_v=298.15, P_atm=101325, C3_plant=TRUE, V_
     # Leaf mitochondrial respiration at 25 degC (umol CO2 m^-2 s^-1):
     if (biogeochem) {
         if (is.null(leaf_N_conc)) stop('leaf_N_conc has to be specified.')
-        R_d25 = 0.2577*leaf_N_conc
+        R_d25 = 0.2577*leaf_N_conc*f_Kn_Kb
+        # Added "f_Kn_Kb" to scale "R_d25" above. Not sure if it needs to be adjusted for daylength. (Tai, Apr 2020)
     } else {
         if (C3_plant) R_d25 = 0.015*V_cmax25 else R_d25 = 0.025*V_cmax25
     }
