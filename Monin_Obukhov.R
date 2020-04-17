@@ -104,11 +104,15 @@ f_Monin_Obukhov = function(Z_0m, Z_atm=10, H_sen, ET, u_star, T_2m, T_atm, theta
    if (H_sen > 0 & theta_s < theta_2m) theta_s = theta_2m
    if (H_sen < 0 & theta_s > theta_2m) theta_s = theta_2m
    T_s = theta_s*(P_disp/P_surf)^(R_da/c_p)
+   print(paste0('[MO] theta_s = ', signif(theta_s, digits = 3), ' P_surf = ', signif(P_surf, digits = 3),  ' g_ah = ', signif(g_ah, digits = 3),  ' rho_atm = ', signif(rho_atm, digits = 3)))
    
    # Calculate specific humidity (kg kg^-1) at zero-plane displacement height:
+   # print(paste0('[MO] q_atm = ', signif(q_atm, digits = 3), ' ET = ', signif(ET, digits = 3), ' rho_atm = ', signif(rho_atm), ' g_aw = ', signif(g_aw, digits = 3)))
+   
    q_s = q_atm - ET/(-rho_atm*g_aw)
    # q_s = q_atm - q_star/von_Kar*(log((10 + Z_0m)/Z_0w) - f_psi_zeta((10 + Z_0m)/L_Obuk)$psi_w + f_psi_zeta(Z_0w/L_Obuk)$psi_w)
    # Prevent q_s from dropping below zero and being larger than q_sat(T_s):
+   print(paste0('[MO] T_s = ', signif(T_s, digits = 3), ' P_disp = ', signif(P_disp, digits = 3)))
    q_sat = f_esat(T_s)*0.622/P_disp
    q_s = max(c(0, min(c(q_s, q_sat), na.rm=TRUE)), na.rm=TRUE)
    # Check that q_s should not be lower than q_2m if ET > 0, and should not be higher than q_2m if ET < 0:

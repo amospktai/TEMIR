@@ -188,7 +188,7 @@ g1_med_table = c(NA, 2.35, 2.35, 2.35, 4.12, 4.12, 4.45, 4.45, 4.45, 4.7, 4.7, 4
 
 print('Loading surface data...', quote=FALSE)
 
-filename = paste0(surf_data_dir, 'surfdata_map/surfdata_1.9x2.5_mp24_simyr2000_c130419_CLM5coverage.nc')
+filename = paste0(surf_data_dir, 'surfdata_map/surfdata_1.9x2.5_mp24_simyr2000_c130419_CLM5crop_coverage.nc')
 
 nc = nc_open(filename)
 # Dimensions:
@@ -553,7 +553,7 @@ if ((biogeochem_flag && get_planting_date_option == 'prescribed-map') || O3_POD)
                 tmp_harvesting_date_Sack_nc[(1:length(lon_Sack)),,] = tmp_harvesting_date_Sack_nc[rev((1:length(lon_Sack))),,]
             }
             
-            crop_name_vec = c('maize (primary growing season)', 'soybean', 'wheat', 'winter wheat', 'rice (primary growing season)', 'rice (secondary growing season)', 'maize (secondary growing season)')
+            crop_name_vec = c('maize (primary growing season)', 'wheat', 'winter wheat', 'soybean', 'rice (primary growing season)', 'rice (secondary growing season)', 'maize (secondary growing season)')
             prescribed_planting_date_Sack = array(data = NA, dim = c(length(lon), length(lat), length(crop_name_vec)))
             prescribed_harvesting_date_Sack = array(data = NA, dim = c(length(lon), length(lat), length(crop_name_vec)))
             for (z in seq(crop_name_vec)){
@@ -829,54 +829,54 @@ if (!exist_LAI_data && !biogeochem_flag) {
 
 # Moved to this file from "execution_vX.Y.R" (Tai, Feb 2019):
 
-if (O3_damage_flag & !O3_fixed_flag) {
-   
-   # Vector of simulation years:
-   # This is also set above if LAI_data_flag=TRUE.
-   if (!exists('year_vec')) year_vec = as.numeric(unique(substr(make.date.vec(start.date=start_date, end.date=end_date), 1, 4)))
-   
-   # Set surface ozone field path:
-   # Please make sure among the available years for O3 data, there are no missing years in between.
-   O3_nc_files = list.files(O3_data_dir, pattern = paste0('^', O3_subn1, '.*', O3_subn2, '$'))
-   O3_avail_years = sort(as.numeric(str_remove(str_remove(O3_nc_files, pattern = paste0('^', O3_subn1)), pattern = paste0(O3_subn2, '$'))))
-   print(paste0('Available years for O3 data: ', paste(O3_avail_years, collapse = ', ')), quote = FALSE)
-   
-   if (length(O3_avail_years) == 0) stop('Surface O3 data are not found!') else {
-      # Match simulation years to O3 data available:
-      O3_used_years = year_vec
-      # Checking if O3 data are available for the simulation year:
-      if (min(year_vec) < min(O3_avail_years) | max(year_vec) > max(O3_avail_years)) {
-         ind_start_yrs = which(year_vec < min(O3_avail_years))
-         O3_used_years[ind_start_yrs] = O3_avail_years[1]
-         ind_end_yrs = which(year_vec > max(O3_avail_years))
-         O3_used_years[ind_end_yrs] = tail(O3_avail_years, 1)
-         # Print note:
-         if (length(c(ind_start_yrs, ind_end_yrs)) > 1) out_string = 'years' else out_string = 'year'
-         print(paste0('Simulation ', out_string, ' ', paste(year_vec[c(ind_start_yrs, ind_end_yrs)], collapse = ', '), ' does not have the corresponding O3 data so closest available year(s) are used.'), quote = FALSE)
-      }
-   }
-   
-   # Get O3 nc file for the first simulation year:
-   # O3 fields for subsequent simulation years will be read in at the beginning of each year.
-   
-   # Load hourly ozone field:
-   filename = paste0(O3_data_dir, O3_subn1, as.character(O3_used_years[1]), O3_subn2)
-   print(paste0('Loading surface O3 concentrations from ', filename, '...'), quote=FALSE)
-   nc = nc_open(filename)
-   lon_O3 = ncvar_get(nc, unname(O3_dim_vec['longitude']))
-   lat_O3 = ncvar_get(nc, unname(O3_dim_vec['latitude']))
-   # Surface O3 concentration (ppbv):
-   O3_hourly = ncvar_get(nc, O3_array_name)
-   nc_close(nc)
-   
-   # Regrid to model resolution if input resolution is not consistent:
-   if (sum(lon != lon_O3) > 0 | sum(lat[2:(length(lat)-1)] != lat_O3[2:(length(lat_O3)-1)]) > 0) {
-      # Regrid to model resolution:
-      print('Regridding hourly O3 concentrations for year ', as.character(O3_used_years[1]), '...', quote=FALSE)
-      O3_hourly = sp.regrid(spdata=O3_hourly, lon.in=lon_O3, lat.in=lat_O3, lon.out=lon, lat.out=lat)
-   }
-   
-}
+# if (O3_damage_flag & !O3_fixed_flag) {
+#    
+#    # Vector of simulation years:
+#    # This is also set above if LAI_data_flag=TRUE.
+#    if (!exists('year_vec')) year_vec = as.numeric(unique(substr(make.date.vec(start.date=start_date, end.date=end_date), 1, 4)))
+#    
+#    # Set surface ozone field path:
+#    # Please make sure among the available years for O3 data, there are no missing years in between.
+#    O3_nc_files = list.files(O3_data_dir, pattern = paste0('^', O3_subn1, '.*', O3_subn2, '$'))
+#    O3_avail_years = sort(as.numeric(str_remove(str_remove(O3_nc_files, pattern = paste0('^', O3_subn1)), pattern = paste0(O3_subn2, '$'))))
+#    print(paste0('Available years for O3 data: ', paste(O3_avail_years, collapse = ', ')), quote = FALSE)
+#    
+#    if (length(O3_avail_years) == 0) stop('Surface O3 data are not found!') else {
+#       # Match simulation years to O3 data available:
+#       O3_used_years = year_vec
+#       # Checking if O3 data are available for the simulation year:
+#       if (min(year_vec) < min(O3_avail_years) | max(year_vec) > max(O3_avail_years)) {
+#          ind_start_yrs = which(year_vec < min(O3_avail_years))
+#          O3_used_years[ind_start_yrs] = O3_avail_years[1]
+#          ind_end_yrs = which(year_vec > max(O3_avail_years))
+#          O3_used_years[ind_end_yrs] = tail(O3_avail_years, 1)
+#          # Print note:
+#          if (length(c(ind_start_yrs, ind_end_yrs)) > 1) out_string = 'years' else out_string = 'year'
+#          print(paste0('Simulation ', out_string, ' ', paste(year_vec[c(ind_start_yrs, ind_end_yrs)], collapse = ', '), ' does not have the corresponding O3 data so closest available year(s) are used.'), quote = FALSE)
+#       }
+#    }
+#    
+#    # Get O3 nc file for the first simulation year:
+#    # O3 fields for subsequent simulation years will be read in at the beginning of each year.
+#    
+#    # Load hourly ozone field:
+#    filename = paste0(O3_data_dir, O3_subn1, as.character(O3_used_years[1]), O3_subn2)
+#    print(paste0('Loading surface O3 concentrations from ', filename, '...'), quote=FALSE)
+#    nc = nc_open(filename)
+#    lon_O3 = ncvar_get(nc, unname(O3_dim_vec['longitude']))
+#    lat_O3 = ncvar_get(nc, unname(O3_dim_vec['latitude']))
+#    # Surface O3 concentration (ppbv):
+#    O3_hourly = ncvar_get(nc, O3_array_name)
+#    nc_close(nc)
+#    
+#    # Regrid to model resolution if input resolution is not consistent:
+#    if (sum(lon != lon_O3) > 0 | sum(lat[2:(length(lat)-1)] != lat_O3[2:(length(lat_O3)-1)]) > 0) {
+#       # Regrid to model resolution:
+#       print('Regridding hourly O3 concentrations for year ', as.character(O3_used_years[1]), '...', quote=FALSE)
+#       O3_hourly = sp.regrid(spdata=O3_hourly, lon.in=lon_O3, lat.in=lat_O3, lon.out=lon, lat.out=lat)
+#    }
+#    
+# }
 
 ################################################################################
 ### Wesely dry deposition module constants:

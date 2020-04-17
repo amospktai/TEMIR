@@ -448,7 +448,8 @@ f_ozone_impact = function(O3_conc, g_s, g_b, g_ah, P_atm=101325, theta_atm=298.1
     # Convert from ppb to nmol m^-3:
     O3_conc_nmol = O3_conc*P_atm/(theta_atm*R_uni)
     # O3:H2O resistance ratio defined by Sitch et al. (2007):
-    k_O3 = 1.67
+    # k_O3 = 1.67
+    k_O3 = 1.61
     # Instantaneous ozone flux (nmol m^-2 s^-1):
     O3_flux = O3_conc_nmol/(k_O3/g_s + 1/g_b + 1/g_ah)
     # This follows Lombardozzi et al. [2015], but it seems more appropriate to use g_ah or g_aw instead of g_am to calculate ozone flux.
@@ -457,14 +458,19 @@ f_ozone_impact = function(O3_conc, g_s, g_b, g_ah, P_atm=101325, theta_atm=298.1
     if (scheme == 'Lombardozzi') {
         
         # Add a threshold of uptake (nmol m^-2 s^-1):
-        O3_flux_th = 0.8
+        # O3_flux_th = 0.8
+        O3_flux_th = 4  # derived from soyFACE, apply for soybean only
         O3_flux_crit = max(c(0, (O3_flux - O3_flux_th)), na.rm=TRUE)
         # Model time step in hr:
         dt_hr = dt/3600
         # Ozone flux per time step (mmol m^-2):
         O3_flux_dt = O3_flux_crit*1e-6*dt
         
-        if (LAI > 0.5) {
+        # Suggestion from Jacky (Feb, 2020)
+        # 1. the condition 'LAI > 0.5' should not apply on annual crops
+        # 2. 'heal' is not considered when deriving coefficients for soybean
+        
+        if (LAI > 0.5 & plant_group != 'C3_grass' & plant_group != 'C4_grass') {
             # Minimize O3 damage to new leaves:
             if (LAI > LAI_prev) heal = max(c(0, (LAI - LAI_prev)/LAI*O3_flux_dt), na.rm=TRUE) else heal = 0
             # Leaf turnover in hr^-1 by PFT:
@@ -473,6 +479,9 @@ f_ozone_impact = function(O3_conc, g_s, g_b, g_ah, P_atm=101325, theta_atm=298.1
             decay = CUO_prev*turnover*dt_hr
             # New CUO (mmol m^-2):
             CUO = max(c(0, (CUO_prev + O3_flux_dt - decay - heal)), na.rm=TRUE)
+            
+        } else if (LAI > 0 & plant_group == 'C3_grass' | plant_group == 'C4_grass') {
+            CUO = max(c(0, (CUO_prev + O3_flux_dt)), na.rm=TRUE)
         } else {
             CUO = 0
         }
@@ -504,7 +513,7 @@ f_ozone_impact = function(O3_conc, g_s, g_b, g_ah, P_atm=101325, theta_atm=298.1
             broad_gs_slope = 0
             grass_gs_int = 0.4621
             grass_gs_slope = 0.0229
-        } else {
+        } else if (sensitivity == 'average'){
             needle_An_int = 0.8390
             needle_An_slope = 0
             broad_An_int = 0.8752
@@ -517,6 +526,12 @@ f_ozone_impact = function(O3_conc, g_s, g_b, g_ah, P_atm=101325, theta_atm=298.1
             broad_gs_slope = 0
             grass_gs_int = 0.7511
             grass_gs_slope = 0
+        } else if (sensitivity == 'custom') {
+            # for soyFACE simulation only
+            grass_An_int = 1
+            grass_An_slope = -0.0179
+            grass_gs_int = 1
+            grass_gs_slope = -0.0145
         }
         
         # Ozone impact factors:
@@ -829,7 +844,7 @@ f_Farquhar_Ball_Berry = function(c_a, e_a, phi, T_v=298.15, P_atm=101325, theta_
 ################################################################################
 
 # Find canopy-integrated photosynthesis (umol CO2 m^-2 s^-1) and conductance (umol m^-2 s^-1 or m s^-1):
-f_canopy_photosyn = function(c_a, e_a, phi_sun, phi_sha, T_v=298.15, P_atm=101325, theta_atm=298.15, C3_plant=TRUE, V_cmax25_0, Phi_PSII=0.85, Theta_PSII=0.70, beta_t=1, acclimation=TRUE, T_10d=298.15, lat=0, decl=0, colimit=TRUE, LAI, LAI_sun, K_n=0.30, K_b=0.50, O3_damage=FALSE, O3_conc=NULL, scheme='Lombardozzi', gs_scheme = 'FBB', dt=3600, LAI_prev=NULL, evergreen=FALSE, leaf_long=1e3, CUO_prev_sun=0, CUO_prev_sha=0, sensitivity='high', plant_group='broadleaf', g_ah=NULL, biogeochem=FALSE, leaf_N_conc=NULL, u_leaf, d_leaf=0.04, met_cond=FALSE, tol=1e-3, g1_med=NULL) {
+f_canopy_photosyn = function(c_a, e_a, phi_sun, phi_sha, T_v=298.15, P_atm=101325, theta_atm=298.15, C3_plant=TRUE, V_cmax25_0, Phi_PSII=0.85, Theta_PSII=0.70, beta_t=1, acclimation=TRUE, T_10d=298.15, lat=0, decl=0, colimit=TRUE, LAI, LAI_sun, K_n=0.30, K_b=0.50, O3_damage=FALSE, O3_conc=NULL, scheme='Lombardozzi', gs_scheme = 'FBB', dt=3600, LAI_prev=NULL, evergreen=FALSE, leaf_long=1e3, CUO_prev_sun=0, CUO_prev_sha=0, CUO_prev_can = 0, sensitivity='high', plant_group='broadleaf', g_ah=NULL, biogeochem=FALSE, leaf_N_conc=NULL, u_leaf, d_leaf=0.04, met_cond=FALSE, tol=1e-3, g1_med=NULL) {
 
     # Uses external function "f_Farquhar_Ball_Berry".
     # Uses global constants: "R_uni = 8.31446" universal gas constant (J K^-1 mol^-1)
@@ -909,7 +924,22 @@ f_canopy_photosyn = function(c_a, e_a, phi_sun, phi_sha, T_v=298.15, P_atm=10132
     g_can = LAI_sun/(1/g_b + 1/g_ssun) + LAI_sha/(1/g_b + 1/g_ssha)
     
     # The way to calculate CUO below is not right... We will have to correct it . (Tai, Feb 2019)
-    CUO_can = CUO_sun*LAI_sun + CUO_sha*LAI_sha
+    # CUO_can = CUO_sun*LAI_sun + CUO_sha*LAI_sha
+
+    # CUO_can could be calculated as follow: (Pang, March 2020)
+    # CUO_can (t+1) = CUO_can (t) + (delta(CUO_sun(t)) * LAIsun + delta(CUO_sha(t)) * LAIsha) / LAI
+    CUO_sun_change = max(0, CUO_sun - CUO_prev_sun)
+    CUO_sha_change = max(0, CUO_sha - CUO_prev_sha)
+    
+    # prevent division of zero when LAI is zero (BGC mode)
+    CUO_can_change = ifelse (test = LAI_sha + LAI_sha == 0 | is.na(LAI_sha + LAI_sha), yes = 0,
+                             no = (CUO_sun_change * LAI_sun + CUO_sha_change * LAI_sha) / (LAI_sun + LAI_sha))
+    CUO_can_change = max(0, CUO_can_change)
+    
+    # force CUO_can to be zero when plant (crop) is not planted
+    CUO_can = ifelse (test = LAI_sha + LAI_sha == 0 | is.na(LAI_sha + LAI_sha), yes = 0,
+                    no = CUO_prev_can + CUO_can_change)
+    
     
     # Stomatal conductance weighted by sunlit and shaded fraction (umol m^-2 s^-1 or m s^-1):
     g_s = (g_ssun*LAI_sun + g_ssha*LAI_sha)/(LAI_sun + LAI_sha)

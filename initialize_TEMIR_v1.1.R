@@ -7,14 +7,18 @@
 TEMIR_version = '1.1'
 
 # Set TEMIR directory:
-TEMIR_dir = '~/Dropbox/Research/Projects/TEMIR/'
+TEMIR_dir = '/users/b146986/TEMIR/'
 
 ################################################################################
 ### TEMIR simulation setup:
 ################################################################################
 
+# Case name read from bash script (temporary)
+TEMIR_caseName = as.character(Sys.getenv("bash_caseName"))
+
 # Create a name for this simulation:
-simulation_name = 'simulation_01'
+simulation_name = TEMIR_caseName
+# simulation_name = 'soyFACE_set2_forceSP_yr2003_eco2'
 
 # Simulation types:
 
@@ -37,11 +41,12 @@ if (!dir.exists(paths = paste0(TEMIR_dir, '/code_v', TEMIR_version))) stop('TEMI
 ################################################################################
 
 # Set simulation directory name:
-sim_dir = paste0(TEMIR_dir, simulation_name, '/')
+sim_dir = paste0(TEMIR_dir,'TEMIR_run/' ,simulation_name, '/')
 
 # Check if simulation directory already exists:
 # if (length(Sys.glob(paths = sim_dir)) == 1) stop(paste0('Simulation directory "', sim_dir,'" already exists!'))
 if (dir.exists(paths = sim_dir)) stop(paste0('Simulation directory "', sim_dir,'" already exists!'))
+dir.create(path = sim_dir)
 
 # Create output directory:
 # system(command=paste0("mkdir -p ", sim_dir, "hist_data"))
@@ -69,6 +74,7 @@ file.copy(from = paste0(TEMIR_dir, 'code_v', TEMIR_version, '/simulation_name.tx
 
 # Copy script that contains functions to analyze outputs:
 file.copy(from = paste0(TEMIR_dir, 'code_v', TEMIR_version, '/find_hist_stat.R'), to = sim_dir)
+
 
 ################################################################################
 ### End of initialization

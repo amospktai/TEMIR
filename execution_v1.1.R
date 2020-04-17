@@ -23,13 +23,20 @@ timestamp()
 ### Source input scripts for model configuration:
 ################################################################################
 
+options(warn = 2)
+
 # Source input scripts:
 # *** Please make sure the input scripts (e.g., input_TEMIR_basic_settings.R) are in the same simulation directory as this execution script. ***
 source('input_TEMIR_basic_settings.R')
 
 if (file.exists('input_TEMIR_biogeochem_extension.R')) {
+   print("Sourcing 'input_TEMIR_biogeochem_extension.R'")
     source('input_TEMIR_biogeochem_extension.R')
+} else {
+    biogeochem_flag = FALSE
 }
+
+print(O3_data_dir)
 
 # Check existence of directory paths:
 dir_check = ls(pattern = "_dir$")
@@ -417,7 +424,7 @@ for (d in 1:n_day_sim) {
    
    # Reload interannually varying inputs on YYYY/01/01 if necessary:
    
-   if (paste0(MM, DD) == '0101' & substr(start_date, 5, 8) != '0101') {
+   if (paste0(MM, DD) == '0101') {
       
       # Reload LAI data if interannually varying LAI data are used:
       if (LAI_data_flag) {
@@ -434,27 +441,34 @@ for (d in 1:n_day_sim) {
       }
       
       # Reload hourly ozone field:
+      # soyFACE temporary 
       if (O3_damage_flag & !O3_fixed_flag) {
-         if (length(year_vec) > 1) {
-            YYYY_O3 = as.character(O3_used_years[which(year_vec == as.numeric(YYYY))])
-            last_YYYY_O3 = as.character(O3_used_years[which(year_vec == as.numeric(YYYY)) - 1])
-            if (YYYY_O3 != last_YYYY_O3) {
-               filename = paste0(O3_data_dir, O3_subn1, YYYY_O3, O3_subn2)
-               print(paste0('Loading surface O3 concentrations from ', filename, '...'), quote=FALSE)
-               nc = nc_open(filename)
-               lon_O3 = ncvar_get(nc, unname(O3_dim_vec['longitude']))
-               lat_O3 = ncvar_get(nc, unname(O3_dim_vec['latitude']))
-               # Surface O3 concentration (ppbv):
-               O3_hourly = ncvar_get(nc, O3_array_name)
-               nc_close(nc)
-               # Regrid to model resolution if input resolution is not consistent:
-               if (sum(lon != lon_O3) > 0 | sum(lat[2:(length(lat)-1)] != lat_O3[2:(length(lat_O3)-1)]) > 0) {
-                  # Regrid to model resolution:
-                  print('Regridding hourly O3 concentrations for year ', YYYY_O3, '...', quote=FALSE)
-                  O3_hourly = sp.regrid(spdata=O3_hourly, lon.in=lon_O3, lat.in=lat_O3, lon.out=lon, lat.out=lat)
-               }
-            }
+         # if (length(year_vec) > 1) {
+         #    YYYY_O3 = as.character(O3_used_years[which(year_vec == as.numeric(YYYY))])
+         #    last_YYYY_O3 = as.character(O3_used_years[which(year_vec == as.numeric(YYYY)) - 1])
+         #    if (YYYY_O3 != last_YYYY_O3) {
+         #       filename = paste0(O3_data_dir, O3_subn1, YYYY_O3, O3_subn2)
+         #       print(paste0('Loading surface O3 concentrations from ', filename, '...'), quote=FALSE)
+         #       nc = nc_open(filename)
+         #       lon_O3 = ncvar_get(nc, unname(O3_dim_vec['longitude']))
+         #       lat_O3 = ncvar_get(nc, unname(O3_dim_vec['latitude']))
+         #       # Surface O3 concentration (ppbv):
+         #       O3_hourly = ncvar_get(nc, O3_array_name)
+         #       nc_close(nc)
+         #       # Regrid to model resolution if input resolution is not consistent:
+         #       if (sum(lon != lon_O3) > 0 | sum(lat[2:(length(lat)-1)] != lat_O3[2:(length(lat_O3)-1)]) > 0) {
+         #          # Regrid to model resolution:
+         #          print('Regridding hourly O3 concentrations for year ', YYYY_O3, '...', quote=FALSE)
+         #          O3_hourly = sp.regrid(spdata=O3_hourly, lon.in=lon_O3, lat.in=lat_O3, lon.out=lon, lat.out=lat)
+         #       }
+         #    }
+         # }
+         
+         # soyFACE temporary 
+         if (force_prescribed_o3) {
+            O3_hourly = ozone_soyFACE_vec
          }
+
       }
       
    }
@@ -595,7 +609,19 @@ for (d in 1:n_day_sim) {
            print("'get_GDDmat_method' is custom, will not read in GDDx map")
        }
    }
-       
+   
+   #### soyFACE project
+   if (biogeochem_flag) {
+       if (force_prescribed_LAI) {
+           daily_LAI = mean(force_prescribed_LAI_input[((d-1)*24+1):((d-1)*24+24)], na.rm = T)
+           if (d != 1) {
+               LAI_dayMinus1 = mean(force_prescribed_LAI_input[((d-2)*24+1):((d-2)*24+24)], na.rm = T)
+           } else {
+               LAI_dayMinus1 = 0
+           }
+       }
+   }
+   
    #############################################################################
    environment(f_simulate_ij) = globalenv()
    environment(f_hist_reshape) = globalenv()
@@ -635,6 +661,8 @@ for (d in 1:n_day_sim) {
          # Get history nc file name:
          filename = paste0(simulation_dir, 'hist_data/hist_grid_', YYYY, MM, DD, '.nc')
          
+         print(paste0('nc filename = ', filename))
+         
          # Delete previous history nc file:
          if (file.exists(filename)) file.remove(filename)
          
@@ -661,16 +689,19 @@ for (d in 1:n_day_sim) {
          ncatt_put(nc, varid=0, attname='Conventions', attval='COARDS')
          ncatt_put(nc, varid=0, attname='History', attval=paste0('Generated on ', Sys.time()))
          
-         # FLUXNET data warnings:
-         if (single_site_flag && FLUXNET_flag) {
-            ncatt_put(nc, varid=0, attname='FLUXNET Site Warnings', attval=FLUXNET_global_err)
-            if (!is.null(FLUXNET_var_err)) {
-               ncvar_put(nc, varid=FLUXNET_err_nc_def, vals=FLUXNET_var_err)
-               ncatt_put(nc, varid='error_number', attname='axis', attval='n_error')
-               ncatt_put(nc, varid='error_replace', attname='axis', attval='error_replace')
-               rm(FLUXNET_var_err)
-            }
-         }
+         # Disable at the time being (Pang, Apr 2020)
+         # Apparently we cannot wrtie logical values into the ncdf4
+         
+         # # FLUXNET data warnings:
+         # if (single_site_flag && FLUXNET_flag) {
+         #    ncatt_put(nc, varid=0, attname='FLUXNET Site Warnings', attval=FLUXNET_global_err)
+         #    if (!is.null(FLUXNET_var_err)) {
+         #       ncvar_put(nc, varid=FLUXNET_err_nc_def, vals=FLUXNET_var_err)
+         #       ncatt_put(nc, varid='error_number', attname='axis', attval='n_error')
+         #       ncatt_put(nc, varid='error_replace', attname='axis', attval='error_replace')
+         #       rm(FLUXNET_var_err)
+         #    }
+         # }
          
          # Close nc file:
          nc_close(nc)
