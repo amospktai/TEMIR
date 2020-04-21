@@ -173,13 +173,13 @@ f_monthly_mean_stat = function(hist_data_dir, start_date, end_date, varid, FUN=m
 
 # Function to find daily mean (weighted by PFT fraction over all PFTs) for variables "A_can", "R_can" or "g_can" from "hist_grid":
 
-f_daily_PFT_sum = function(hist_grid, var.name='A_can') {
+f_daily_PFT_sum = function(hist_grid, var_name='A_can') {
    # Only works for variables "A_can", "R_can" or "g_can".
-   if (var.name == 'A_can') {
+   if (var_name == 'A_can') {
       ivar = 1
-   } else if (var.name == 'R_can') {
+   } else if (var_name == 'R_can') {
       ivar = 2
-   } else if (var.name == 'g_can') {
+   } else if (var_name == 'g_can') {
       ivar = 3
    } else { stop('Variable defined is not valid for this function!') }
    var_daily = array(NaN, dim=c(length(ind_lon), length(ind_lat), n_day_sim))
