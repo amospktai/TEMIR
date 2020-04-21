@@ -98,7 +98,7 @@ if (single_site_flag) {
 # Which plant function type (PFT) to simulate?
 # Default PFTs follow the classification used in Community Land Model version 4.5 (CLM4.5) shown in PFT_df below
 # Please refer to each PFT by its PFT number quote in the first column of PFT_df
-sim_PFT = 1:16
+sim_PFT = 1:24
 
 # Default CLM4.5 PFT dataframe:
 # 1st col = PFT number; 2nd col = PFT description
