@@ -15,6 +15,7 @@
 # Feb 2018: A new variable for areas of grid cells, "grid_area", was added, and now stored in "surf_data_regrid_2000.RData" too. (Tai)
 # Feb 2019: Changed code for reading newer versions (ie vBNU) of GEOS-Chem MODIS LAI (Yung)
 # Feb 2019: Completely revamped the input methods for reading in interannually varying LAI data and O3 data.
+# Apr 2020: When LAI is prescribed by user, the scaling factors used to scale PFT-level LAI have been wrong in the coastal regions due to a mismatch between LAI per unit area of vegetated land vs. per grid cell area. Now this is fixed. (Tai)
 
 ################################################################################
 ### PFT-specific parameters from NCDF file:
@@ -551,9 +552,9 @@ if (LAI_data_flag) {
    
    # Find LAI data available:
    # Please make sure among the available years for LAI data, there are no missing years in between.
-   LAI_nc_files = list.files(LAI_data_dir, pattern = paste0('^', LAI_subn1, '.*', LAI_subn2, '$'))
-   LAI_avail_years = sort(as.numeric(str_remove(str_remove(LAI_nc_files, pattern = paste0('^', LAI_subn1)), pattern = paste0(LAI_subn2, '$'))))
-   print(paste0('Available years for user-defined LAI data: ', paste(LAI_avail_years, collapse = ', ')), quote = FALSE)
+   LAI_nc_files = list.files(LAI_data_dir, pattern=paste0('^', LAI_subn1, '.*', LAI_subn2, '$'))
+   LAI_avail_years = sort(as.numeric(str_remove(str_remove(LAI_nc_files, pattern=paste0('^', LAI_subn1)), pattern=paste0(LAI_subn2, '$'))))
+   print(paste0('Available years for user-defined LAI data: ', paste(LAI_avail_years, collapse=', ')), quote=FALSE)
    
    if (length(LAI_avail_years) == 0) exist_LAI_data = FALSE else {
       
@@ -567,13 +568,13 @@ if (LAI_data_flag) {
          LAI_used_years[ind_end_yrs] = tail(LAI_avail_years, 1)
          # Print note:
          if (length(c(ind_start_yrs, ind_end_yrs)) > 1) out_string = 'years' else out_string = 'year'
-         print(paste0('Simulation ', out_string, ' ', paste(year_vec[c(ind_start_yrs, ind_end_yrs)], collapse = ', '), ' does not have the corresponding LAI data so closest available year(s) are used.'), quote = FALSE)
+         print(paste0('Simulation ', out_string, ' ', paste(year_vec[c(ind_start_yrs, ind_end_yrs)], collapse=', '), ' does not have the corresponding LAI data so closest available year(s) are used.'), quote=FALSE)
       }
       
       # Rescale LAI_day_PFT with user-defined LAI for years required:
       LAI_required_years = unique(LAI_used_years)
       if (length(LAI_required_years) > 1) out_string = 'years' else out_string = 'year'
-      print(paste0('Daily SAI and LAI data for ', out_string, ' ', paste(LAI_required_years, collapse = ', '), ' are needed for this simulation.'), quote=FALSE)
+      print(paste0('Daily SAI and LAI data for ', out_string, ' ', paste(LAI_required_years, collapse=', '), ' are needed for this simulation.'), quote=FALSE)
       
       for (iyear in seq_along(LAI_required_years)) {
          
@@ -598,16 +599,22 @@ if (LAI_data_flag) {
             # Regrid LAI to simulation lon/lat:
             print(paste0('Regridding user-defined LAI for year ', LAI_required_years[iyear], '...'), quote=FALSE)
             LAI_data_mon = NaN.to.zero(sp.regrid(spdata=zero.to.NaN(LAI_data_mon), lon.in=lon_LAI, lat.in=lat_LAI, lon.out=lon, lat.out=lat))
+            # LAI_data_mon above is LAI per unit area of vegetated land, but we should use LAI per unit grid cell area for rescaling. We correct it by multiplying it with the fraction of vegetated land in a grid cell (Tai, Apr 2020):
+            veg_frac = apply(PFT_frac[,,-1], MARGIN=1:2, FUN=sum)
+            LAI_data_mon = LAI_data_mon*array(veg_frac, dim=dim(LAI_data_mon))
+            # Revised above: Tai (Apr 2020)
             
             # Rescale CLM PFT-level monthly LAI according to user-defined LAI:
             # Define scaling factor:
-            Z = LAI_data_mon/zero.to.NaN(apply(LAI_mon_PFT*array(data = PFT_frac, dim = c(dim(PFT_frac), 12)), MARGIN = c(1,2,4), FUN = sum))
+            Z = LAI_data_mon/zero.to.NaN(apply(LAI_mon_PFT*array(data=PFT_frac, dim=c(dim(PFT_frac), 12)), MARGIN=c(1,2,4), FUN=sum))
             Z[which(is.na(Z))] = 1
-            Z[which(Z > 10)] = 10   # Max it out at a factor of 10
+            # Z[which(Z > 10)] = 10   # Max it out at a factor of 10
+            Z[which(Z > 5)] = 5     # Max it out at a factor of 5 (Tai, Apr 2020)
             LAI_scaling_array = Z
+            
             # Rescale:
-            LAI_data_mon_PFT = array(data = 0, dim = dim(LAI_mon_PFT))
-            # SAI_data_mon_PFT = array(data = 0, dim = dim(SAI_mon_PFT))
+            LAI_data_mon_PFT = array(data=0, dim=dim(LAI_mon_PFT))
+            # SAI_data_mon_PFT = array(data=0, dim=dim(SAI_mon_PFT))
             for (ipft in 1:length(pftnum)) {
                LAI_data_mon_PFT[,,ipft,] = LAI_mon_PFT[,,ipft,]*LAI_scaling_array
                # Rescale SAI as well (not turned on):
@@ -641,8 +648,8 @@ if (LAI_data_flag) {
             
             timestamp()
             
-            # Save variables and parameters:
-            save(list=c('LAI_data_mon', 'LAI_scaling_array', 'LAI_day_PFT', 'SAI_day_PFT', 'lon', 'lat', 'pftname', 'pftnum', 'day'), file=output_filename)
+            # Save variables and parameters (updated: Tai, Apr 2020):
+            save(list=c('LAI_data_mon', 'veg_frac', 'LAI_scaling_array', 'LAI_data_mon_PFT', 'LAI_day_PFT', 'SAI_day_PFT', 'lon', 'lat', 'pftname', 'pftnum', 'day'), file=output_filename)
             
          }
          
