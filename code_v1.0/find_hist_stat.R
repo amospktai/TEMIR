@@ -173,13 +173,13 @@ f_monthly_mean_stat = function(hist_data_dir, start_date, end_date, varid, FUN=m
 
 # Function to find daily mean (weighted by PFT fraction over all PFTs) for variables "A_can", "R_can" or "g_can" from "hist_grid":
 
-f_daily_PFT_sum = function(hist_grid, var_name='A_can') {
+f_daily_PFT_sum = function(hist_grid, var.name='A_can') {
    # Only works for variables "A_can", "R_can" or "g_can".
-   if (var_name == 'A_can') {
+   if (var.name == 'A_can') {
       ivar = 1
-   } else if (var_name == 'R_can') {
+   } else if (var.name == 'R_can') {
       ivar = 2
-   } else if (var_name == 'g_can') {
+   } else if (var.name == 'g_can') {
       ivar = 3
    } else { stop('Variable defined is not valid for this function!') }
    var_daily = array(NaN, dim=c(length(ind_lon), length(ind_lat), n_day_sim))
@@ -195,6 +195,49 @@ f_daily_PFT_sum = function(hist_grid, var_name='A_can') {
       }
    }
    return(var_daily)
+}
+
+# Function to find weighted sum over all PFTs for any PFT-level data array:
+
+f_PFT_sum = function(X, PFT_frac=PFT_frac, PFT_dim) {
+   # "X" is any multidimensional data array with at least three dimensions for at least longitude, latitude and PFT. The first dimension has to be longitude, and the second dimension has to be latitude. Maximum number of dimensions is six.
+   # "PFT_frac" is a three-dimensional array with 1st dim being longitude, 2nd dim being latitude, and 3rd dim being PFT, containing the fractional coverage of different PFTs over the entire grid cell (not land only).
+   # "lon_dim", "lat_dim" and "PFT_dim" are the n-th dimensions for longitude, latitude and PFT, respectiviely, of "X".
+   dim_X = dim(X)
+   if (PFT_dim > length(dim_X) | PFT_dim == 1 | PFT_dim == 2) stop("PFT_dim is not correctly specified!")
+   if (length(dim_X) == 3) {
+      X_out = apply(X*PFT_frac, MARGIN=1:2, FUN=sum, na.rm=TRUE)
+   } else if (length(dim_X) == 4) {
+      X_out = array(NaN, dim=dim_X[-PFT_dim])
+      extra_dim = (1:4)[-c(1, 2, PFT_dim)]
+      for (k in 1:dim_X[extra_dim]) {
+         if (PFT_dim == 3) X_sub = X[,,,k] else X_sub = X[,,k,]
+         X_out[,,k] = apply(X_sub*PFT_frac, MARGIN=1:2, FUN=sum, na.rm=TRUE)
+      }
+   } else if (length(dim_X) == 5) {
+      X_out = array(NaN, dim=dim_X[-PFT_dim])
+      extra_dim = (1:5)[-c(1, 2, PFT_dim)]
+      for (k in 1:dim_X[extra_dim[1]]) {
+         for (l in 1:dim_X[extra_dim[2]]) {
+            if (PFT_dim == 3) X_sub = X[,,,k,l] else if (PFT_dim == 4) X_sub = X[,,k,,l] else X_sub = X[,,k,l,]
+            X_out[,,k,l] = apply(X_sub*PFT_frac, MARGIN=1:2, FUN=sum, na.rm=TRUE)
+         }
+      }
+   } else if (length(dim_X) == 6) {
+      X_out = array(NaN, dim=dim_X[-PFT_dim])
+      extra_dim = (1:6)[-c(1, 2, PFT_dim)]
+      for (k in 1:dim_X[extra_dim[1]]) {
+         for (l in 1:dim_X[extra_dim[2]]) {
+            for (m in 1:dim_X[extra_dim[3]]) {
+               if (PFT_dim == 3) X_sub = X[,,,k,l,m] else if (PFT_dim == 4) X_sub = X[,,k,,l,m] else if (PFT_dim == 5) X_sub = X[,,k,l,,m] else X_sub = X[,,k,l,m,]
+               X_out[,,k,l,m] = apply(X_sub*PFT_frac, MARGIN=1:2, FUN=sum, na.rm=TRUE)
+            }
+         }
+      }
+   } else {
+      stop("Input data array has more than six dimensions!")
+   }
+   return(X_out)
 }
 
 ################################################################################
