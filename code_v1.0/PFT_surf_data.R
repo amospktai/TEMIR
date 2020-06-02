@@ -759,7 +759,7 @@ if (O3_damage_flag & !O3_fixed_flag) {
    # Regrid to model resolution if input resolution is not consistent:
    if (sum(lon != lon_O3) > 0 | sum(lat[2:(length(lat)-1)] != lat_O3[2:(length(lat_O3)-1)]) > 0) {
       # Regrid to model resolution:
-      print('Regridding hourly O3 concentrations for year ', as.character(O3_used_years[1]), '...', quote=FALSE)
+      print(paste0('Regridding hourly O3 concentrations for year ', as.character(O3_used_years[1]), '...'), quote=FALSE)
       O3_hourly = sp.regrid(spdata=O3_hourly, lon.in=lon_O3, lat.in=lat_O3, lon.out=lon, lat.out=lat)
    }
    
