@@ -597,7 +597,7 @@ f_ci = function() {
     g_s = f_stomatal_cond(A_n=A_n, c_a=c_a, e_a=e_a, g_b=g_b, T_v=T_v, P_atm=P_atm, beta_t=beta_t, C3_plant=C3_plant, met_cond=FALSE, g1_med=g1_med)
     # Revised "c_i":
     ci_new = c_a - (1.4/g_b + 1.6/g_s)*P_atm*A_n
-    if (A_n <= 0) fval = 0 else fval = c_i - ci_new
+    if (leaf_photosyn$A <= 0) fval = 0 else fval = c_i - ci_new
     output = list(fval=fval, c_i=ci_new, g_s=g_s, A_n=A_n, R_d=R_d)
     return(output)
 }
@@ -624,8 +624,8 @@ f_ci2 = function() {
     O3_coef_An_new = ozone_impact$O3_coef_An
     # Revised "c_i":
     ci_new = c_a - (1.4/g_b + 1.6/g_s)*P_atm*A_n
-    if (A_n <= 0) fval = 0 else fval = c_i - ci_new
-    if (A_n <= 0) gval = 0 else gval = O3_coef_An - O3_coef_An_new
+    if (leaf_photosyn$A <= 0) fval = 0 else fval = c_i - ci_new
+    if (leaf_photosyn$A <= 0) gval = 0 else gval = O3_coef_An - O3_coef_An_new
     output = list(fval=fval, gval=gval, c_i=ci_new, O3_coef_An=O3_coef_An_new, g_s=g_s, A_n=A_n, R_d=R_d)
     return(output)
 }
