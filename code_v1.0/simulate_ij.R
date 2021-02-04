@@ -272,7 +272,7 @@ f_simulate_ij = function(IJ) {
             theta_10m = if (FLUXNET_flag) T_10m + (g_E/c_p)*(Z_disp + Z_0m + 10) else T_10m*(P_surf/P_10m)^(R_da/c_p)
             # If "q_10m" is not provided, needed to scale it from the temperature difference (theta_10m - theta_2m).
             # Specific humidity (kg kg^-1):
-            q_10m = if (!exists('q_10m')) q_2m + (theta_10m - theta_2m)*c_p*ET/H_sen else q_10m
+            q_10m = if (!exists('q_10m')) { if (H_sen == 0 ) q_2m else { q_2m + (theta_10m - theta_2m)*c_p*ET/H_sen }} else q_10m
             # Vapor pressure (Pa):
             e_10m = P_10m*q_10m/(0.622 + 0.378*q_10m)
             # Moist air density (kg m^-3):
