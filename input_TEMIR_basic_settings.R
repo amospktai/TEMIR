@@ -9,7 +9,7 @@
 multicore_flag = FALSE
 
 # Run in cluster environment (i.e., not on personal computer)?
-cluster_flag = FALSE
+cluster_flag = TRUE
 
 # Number of cores to use:
 # This will be overwritten by system-dependent setting if "cluster_flag=TRUE".
@@ -18,7 +18,37 @@ n_core = detectCores()
 
 # Debugging mode?
 # If turned on, no output data will be saved externally. Debugging mode should be run only in an R console environment (i.e., not via a UNIX command line), and is convenient for single-site simulation.
-debug_flag = TRUE
+debug_flag = FALSE
+
+################################################################################
+### Directories:
+################################################################################
+
+# Required directories:
+
+# Set TEMIR directory:
+TEMIR_dir = '/users/b146986/TEMIR/'
+# Set source code directory:
+code_dir = paste0(TEMIR_dir, 'code_v1.1/')
+# Set meteorological data directory:
+met_data_dir = '/lustre/project/TGABI/data/GEOS_2x2.5/'
+# Set PFT and surface data directory:
+surf_data_dir = paste0(TEMIR_dir, 'TEMIR_inputs/surf_data/')
+# Set processed PFT and surface output directory:
+processed_surf_data_dir = paste0(TEMIR_dir, 'TEMIR_inputs/processed_surf_data/')
+
+# Optional directories:
+
+# Set FLUXNET directory (set as NA if this is not available):
+FLUXNET_dir = '/lustre/project/TGABI/data/FLUXNET/'
+
+# Whatever are specified below, they will be overridden by "O3_data_dir" and "LAI_data_dir" set in the input script. They are preliminarily defined here to avoid problems during checking directory paths (below) when the execution script is re-run in the same console. (Tai, Feb 2019)
+# Set user-defined LAI data directory (containing LAI nc files):
+LAI_data_dir = NA
+# Set ozone data directory:
+O3_data_dir = paste0(TEMIR_dir, 'TEMIR_inputs/o3_input/')
+
+optional_dirs = c('FLUXNET_dir', 'LAI_data_dir', 'O3_data_dir')
 
 ################################################################################
 ### Model configuration:
@@ -40,8 +70,12 @@ dlat = 2.0
 lat = seq(-90, 90, by=dlat)
 
 # Model run dates:
-start_date = 20090601
-end_date = 20090602
+# (temporary) read from bash
+sim_year = as.numeric(Sys.getenv("bash_year"))
+start_date = as.numeric(paste0(sim_year,'0101'))
+end_date = as.numeric(paste0(sim_year,'1231')); rm(sim_year)
+# start_date = 20030101
+# end_date = 20031231
 
 # Continue from previous run?
 # If set true, temporary data within 10 days before the start date are needed.
@@ -53,22 +87,24 @@ continue_flag = FALSE
 single_site_flag = TRUE
 
 # Running FLUXNET site?
-FLUXNET_site_flag = FALSE
+FLUXNET_site_flag = TRUE
 # Running simulation with FLUXNET met/canopy data?
-FLUXNET_flag = FALSE
+FLUXNET_flag = TRUE
 # Specify FLUXNET site ID (ignored if FLUXNET_site_flag=FALSE):
-FLUXNET_site_id = "US-Ha1"
+FLUXNET_site_id = "US-Ne2"
 # # Saving FLUXNET meteorological data as ncdf? NOT SUPPORTED YET
 # save_FLUXNET_data_flag = TRUE
 
 # Specify location (lon, lat) of local site of interest:
 if (single_site_flag && !FLUXNET_site_flag) {
-   lon_sim = 8.4104
-   lat_sim = 47.2102
+   lon_sim = -88.14
+   lat_sim = 40.02
 } else {
    # Specify range of lon/lat of a given region of interest:
-   lon_sim = c(-180, 180)
-   lat_sim = c(-90, 90)
+   # lon_sim = c(30, 40)
+   # lat_sim = c(25, 50)
+   lon_sim = c(-180,180)
+   lat_sim = c(-90,90)
 }
 
 ################################################################################
@@ -76,7 +112,9 @@ if (single_site_flag && !FLUXNET_site_flag) {
 ### Basic ecosystem model parameters ###
 
 # Ambient CO2 concentration (ppm):
-CO2_conc = 390
+# (temporary) read from bash
+CO2_conc = as.numeric(Sys.getenv("bash_co2"))
+# CO2_conc = 550
 
 # Fixed photosynthetic parameters:
 # Nitrogen extinction coefficient:
@@ -106,7 +144,7 @@ Monin_Obukhov_flag = FALSE
 
 # Which dry deposition scheme to use (either 'Wesely', 'Zhang' or NULL)?
 # Set drydep_scheme=NULL if dry deposition computation is to be turned off.
-drydep_scheme = NULL
+drydep_scheme = 'NULL'
 
 # Use default TEMIR aerodynamic conductance for scalars?
 # If so, the default method in "Monin_Obukhov.R" will be used.
@@ -129,6 +167,17 @@ CO2_scale_flag = TRUE
 
 ################################################################################
 
+### POD3 simulation ###
+
+O3_POD = FALSE
+if (O3_POD) {
+    # primary or secondary growing season used in Sack planting date/ harvesting date dataset
+    # only applied for maize and rice
+    crop_growing_season = 'primary'
+}
+
+################################################################################
+
 ### Ozone damage scheme ###
 
 # Turn on ozone damage?
@@ -137,9 +186,9 @@ O3_damage_flag = FALSE
 # Ozone damage scheme ('Lombardozzi' or 'Sitch'):
 O3_damage_scheme = 'Lombardozzi'
 # Ozone sensitivity:
-# For "Lombardozzi" scheme: "high", "average" or "low"
+# For "Lombardozzi" scheme: "high", "average" or "low" (added 'custom' for soyFACE simultaions, Feb 2020, Pang)
 # For "Sitch" scheme: "high" or "low"
-O3_sensitivity = 'high'
+O3_sensitivity = 'custom'
 
 # Use default TEMIR aerodynamic conductance for scalars to calculate O3 flux?
 # Set use_TEMIR_ga_flag in the dry deposition menu above.
@@ -155,7 +204,7 @@ if (O3_fixed_flag) O3_conc = 40
 if (O3_damage_flag & !O3_fixed_flag) {
    
    # Set ozone data directory that contains the hourly O3 nc files:
-   O3_data_dir = paste0(TEMIR_dir, 'TEMIR_inputs/O3_data/')
+   O3_data_dir = paste0(TEMIR_dir, 'TEMIR_inputs/o3_input/')
    
    # Set ozone nc filename:
    # Dimensions of ozone concentration array must be: [longitude, latitude, hours of simulation year]
@@ -223,6 +272,7 @@ archive_format = 'nc'
 
 # Variables to archive:
 # Variable names must match the variable name given in available_outputs below
+# output_variables = c('CUO_can', 'CUO_sun', 'CUO_sha')
 output_variables = c()
 
 # Recommended outputs:
@@ -234,6 +284,7 @@ if (TRUE) output_variables = c(output_variables,
                                'K_b', 'phi_sun', 'phi_sha',
                                'surf_alb_beam', 'surf_alb_diff',
                                'beta_t', 'T_a', 'q_a'
+                               # 'CUO_can', 'CUO_sun', 'CUO_sha'
 )
 
 # If new variables are added, both "available_outputs_df" here and "output_assign_df" in "simulate_ij.R" have to be modified.

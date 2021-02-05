@@ -20,46 +20,28 @@ library(fields) # For spatial data
 timestamp()
 
 ################################################################################
-### Directories:
-################################################################################
-
-# Required directories:
-
-# Set TEMIR directory:
-TEMIR_dir = '~/Dropbox/TGABI/TEMIR/'
-# Set source code directory:
-code_dir = paste0(TEMIR_dir, 'code_v1.1/')
-# Set meteorological data directory:
-met_data_dir = paste0(TEMIR_dir, 'TEMIR_inputs/met_data/GEOS_2x2.5.d/')
-# Set PFT and surface data directory:
-surf_data_dir = paste0(TEMIR_dir, 'TEMIR_inputs/clm2_data/')
-# Set processed PFT and surface output directory:
-processed_surf_data_dir = paste0(TEMIR_dir, 'TEMIR_inputs/processed_surf_data/')
-
-################################################################################
-
-# Optional directories:
-
-# Set FLUXNET directory (set as NA if this is not available):
-# FLUXNET_dir = NA
-FLUXNET_dir = paste0(TEMIR_dir, 'TEMIR_inputs/FLUXNET/')
-
-# Whatever are specified below, they will be overridden by "O3_data_dir" and "LAI_data_dir" set in the input script. They are preliminarily defined here to avoid problems during checking directory paths (below) when the execution script is re-run in the same console. (Tai, Feb 2019)
-# Set user-defined LAI data directory (containing LAI nc files):
-LAI_data_dir = NA
-# Set ozone data directory:
-O3_data_dir = NA
-# *** "LAI_data_dir" and "O3_data_dir" are to be overridden by what you set in the input script. ***
-
-################################################################################
 ### Source input scripts for model configuration:
 ################################################################################
 
+options(warn = 2)
+
+# Source input scripts:
+# *** Please make sure the input scripts (e.g., input_TEMIR_basic_settings.R) are in the same simulation directory as this execution script. ***
+source('input_TEMIR_basic_settings.R')
+
+if (file.exists('input_TEMIR_biogeochem_extension.R')) {
+   print("Sourcing 'input_TEMIR_biogeochem_extension.R'")
+    source('input_TEMIR_biogeochem_extension.R')
+} else {
+    biogeochem_flag = FALSE
+}
+
+print(O3_data_dir)
+
 # Check existence of directory paths:
 dir_check = ls(pattern = "_dir$")
-optional_dirs = c('FLUXNET_dir', 'LAI_data_dir', 'O3_data_dir')
 NA_dirs = match(optional_dirs, dir_check)[is.na(sapply(X = optional_dirs, FUN = get))]
-if (length(NA_dirs) != 0) dir_check = dir_check[-NA_dirs] 
+if (length(NA_dirs) != 0) dir_check = dir_check[-NA_dirs]
 for (idir in seq_along(dir_check)) {
    # if (length(Sys.glob(paths = get(dir_check[idir]))) == 0) stop(paste0(dir_check[idir], ' does not exist!'))
    if (!dir.exists(paths = get(dir_check[idir]))) stop(paste0(dir_check[idir], ' does not exist!'))
@@ -90,18 +72,12 @@ cat('\n')
 # }
 # setwd(simulation_dir)
 
-# Source input scripts:
-# *** Please make sure the input scripts (e.g., input_TEMIR_ecophysiol.R) are in the same simulation directory as this execution script. ***
-input_scripts = list.files(path = simulation_dir, pattern = "^input_")
-for (script in input_scripts) {
-   source(file = paste0(simulation_dir, script))
-}
-
 # Get simulation configuration:
 model_config_vec = setdiff(ls(), ls(pattern = '_dir$'))
 
 # Turn on default TEMIR aerodynamic conductance scheme if Monin_Obukhov_flag=TRUE:
 if (Monin_Obukhov_flag) use_TEMIR_ga_flag = TRUE
+
 
 ################################################################################
 ### Source scripts
@@ -140,6 +116,15 @@ if (!is.na(FLUXNET_dir)) source(paste0(code_dir, 'FLUXNET_functions.R'))
 # Surface and PFT input parameters (prescribed):
 source(paste0(code_dir, 'PFT_surf_data.R'))
 
+# Functions used in biogeochemistry module
+if(biogeochem_flag){
+   source(paste0(BGC_code_dir, 'biomass_partitioning.R'))
+   source(paste0(BGC_code_dir, 'plant_phenology.R'))
+   source(paste0(BGC_code_dir, 'plant_physiology.R'))
+   source(paste0(BGC_code_dir, 'maintenance_respiration.R'))
+   source(paste0(BGC_code_dir, 'Cpool_addition_subtraction.R'))
+}
+
 ################################################################################
 ### Define additional dimensional and variable info:
 ################################################################################
@@ -154,9 +139,6 @@ date_vec = make.date.vec(start.date=start_date, end.date=end_date)
 
 # Number of simulation days:
 n_day_sim = length(date_vec)
-
-# Biogeochemistry setting:
-if (!exists('biogeochem_flag')) biogeochem_flag = FALSE
 
 # Global simulation setting:
 if (!single_site_flag) {
@@ -283,7 +265,7 @@ var_name = available_outputs_df[na.omit(match(unique(output_variables), availabl
 var_list = list()
 var_name[] = lapply(var_name, as.character) # for R version 3.1.1 
 for (v in 1:nrow(var_name)) {
-   var_dim_list = if (var_name[v,'res_level'] == 'PFT') list(X, Y, P, H) else list(X, Y, H)
+   var_dim_list = if (var_name[v,'res_level'] == 'PFT') {list(X, Y, P, H)} else if (var_name[v,'res_level'] == 'grid') {list(X, Y, H)} else if (var_name[v,'res_level'] == 'PFT_daily') {list(X, Y, P)}
    var_list[[v]] = ncvar_def(name=var_name[v,'variable_name'], units=var_name[v,'unit'], dim=var_dim_list, longname=var_name[v,'long_name'], prec='float', compression=4)
 }
 rm(var_dim_list)
@@ -442,7 +424,7 @@ for (d in 1:n_day_sim) {
    
    # Reload interannually varying inputs on YYYY/01/01 if necessary:
    
-   if (paste0(MM, DD) == '0101' & substr(start_date, 5, 8) != '0101') {
+   if (paste0(MM, DD) == '0101') {
       
       # Reload LAI data if interannually varying LAI data are used:
       if (LAI_data_flag) {
@@ -459,27 +441,34 @@ for (d in 1:n_day_sim) {
       }
       
       # Reload hourly ozone field:
+      # soyFACE temporary 
       if (O3_damage_flag & !O3_fixed_flag) {
-         if (length(year_vec) > 1) {
-            YYYY_O3 = as.character(O3_used_years[which(year_vec == as.numeric(YYYY))])
-            last_YYYY_O3 = as.character(O3_used_years[which(year_vec == as.numeric(YYYY)) - 1])
-            if (YYYY_O3 != last_YYYY_O3) {
-               filename = paste0(O3_data_dir, O3_subn1, YYYY_O3, O3_subn2)
-               print(paste0('Loading surface O3 concentrations from ', filename, '...'), quote=FALSE)
-               nc = nc_open(filename)
-               lon_O3 = ncvar_get(nc, unname(O3_dim_vec['longitude']))
-               lat_O3 = ncvar_get(nc, unname(O3_dim_vec['latitude']))
-               # Surface O3 concentration (ppbv):
-               O3_hourly = ncvar_get(nc, O3_array_name)
-               nc_close(nc)
-               # Regrid to model resolution if input resolution is not consistent:
-               if (sum(lon != lon_O3) > 0 | sum(lat[2:(length(lat)-1)] != lat_O3[2:(length(lat_O3)-1)]) > 0) {
-                  # Regrid to model resolution:
-                  print('Regridding hourly O3 concentrations for year ', YYYY_O3, '...', quote=FALSE)
-                  O3_hourly = sp.regrid(spdata=O3_hourly, lon.in=lon_O3, lat.in=lat_O3, lon.out=lon, lat.out=lat)
-               }
-            }
+         # if (length(year_vec) > 1) {
+         #    YYYY_O3 = as.character(O3_used_years[which(year_vec == as.numeric(YYYY))])
+         #    last_YYYY_O3 = as.character(O3_used_years[which(year_vec == as.numeric(YYYY)) - 1])
+         #    if (YYYY_O3 != last_YYYY_O3) {
+         #       filename = paste0(O3_data_dir, O3_subn1, YYYY_O3, O3_subn2)
+         #       print(paste0('Loading surface O3 concentrations from ', filename, '...'), quote=FALSE)
+         #       nc = nc_open(filename)
+         #       lon_O3 = ncvar_get(nc, unname(O3_dim_vec['longitude']))
+         #       lat_O3 = ncvar_get(nc, unname(O3_dim_vec['latitude']))
+         #       # Surface O3 concentration (ppbv):
+         #       O3_hourly = ncvar_get(nc, O3_array_name)
+         #       nc_close(nc)
+         #       # Regrid to model resolution if input resolution is not consistent:
+         #       if (sum(lon != lon_O3) > 0 | sum(lat[2:(length(lat)-1)] != lat_O3[2:(length(lat_O3)-1)]) > 0) {
+         #          # Regrid to model resolution:
+         #          print('Regridding hourly O3 concentrations for year ', YYYY_O3, '...', quote=FALSE)
+         #          O3_hourly = sp.regrid(spdata=O3_hourly, lon.in=lon_O3, lat.in=lat_O3, lon.out=lon, lat.out=lat)
+         #       }
+         #    }
+         # }
+         
+         # soyFACE temporary 
+         if (force_prescribed_o3) {
+            O3_hourly = ozone_soyFACE_vec
          }
+
       }
       
    }
@@ -581,6 +570,59 @@ for (d in 1:n_day_sim) {
    
    #############################################################################
    
+   # Soil temperature for biogeochemistry (Pang)
+   if (biogeochem_flag){
+       # Specify the soil layer depth (unit: m) for soil temperature from the surface layer to the deepest layer, can be a number (single layer) or an array (multiple layers)
+       soil_layer_depth = c(0.0988,0.2940,0.6799,1.4425,2.9496)
+       
+       filename = list.files(path = paste0(soilT_data_dir), pattern = paste0(YYYY,MM,DD), recursive = T)
+       filename = paste0(soilT_data_dir, filename)
+       
+       nc = nc_open(filename)
+       # Soil temperature 1st layer (0 - 9.88cm) (K)
+       TSOIL1 = ncvar_get(nc,"TSOIL1")
+       # Soil temperature 2nd layer (9.88cm - 29.4cm) (K)
+       TSOIL2 = ncvar_get(nc,"TSOIL2")
+       # Soil temperature 3rd layer (29.4cm - 68.0cm) (K)
+       TSOIL3 = ncvar_get(nc,"TSOIL3")
+       # Soil temperature 4th layer (68.0cm - 144cm) (K)
+       TSOIL4 = ncvar_get(nc,"TSOIL4")
+       # Soil temperature 5th layer (144cm - 295cm) (K)
+       TSOIL5 = ncvar_get(nc,"TSOIL5")
+       nc_close(nc)
+   }
+   
+   # GDD map for determining GDDmat
+   if (biogeochem_flag) {
+       if (get_GDDmat_method == "CLM4.5") {
+           # For simplicity, we decide not to implement the moving average of GDDx like the one in CLM4.5, as the prediction of the change in planting/harvesting date are not very accurate anyway
+           # We only use the GDDx map in yr 2000 and calculate the corresponding GDDmat
+           filename = paste0(GDDx_map_dir,'MEERA2_year_2000_growing_season_GDDx_map.nc')
+           nc = nc_open(filename)
+           GDD0_map = ncvar_get(nc,"GDD0")
+           GDD8_map = ncvar_get(nc,"GDD8")
+           GDD10_map = ncvar_get(nc,"GDD10")
+           nc_close(nc)
+       } else if (get_GDDmat_method == "Sack") {
+           # The data is read in at PFT_surf_data.R
+       } else if (get_GDDmat_method == "custom") {
+           print("'get_GDDmat_method' is custom, will not read in GDDx map")
+       }
+   }
+   
+   #### soyFACE project
+   if (biogeochem_flag) {
+       if (force_prescribed_LAI) {
+           daily_LAI = mean(force_prescribed_LAI_input[((d-1)*24+1):((d-1)*24+24)], na.rm = T)
+           if (d != 1) {
+               LAI_dayMinus1 = mean(force_prescribed_LAI_input[((d-2)*24+1):((d-2)*24+24)], na.rm = T)
+           } else {
+               LAI_dayMinus1 = 0
+           }
+       }
+   }
+   
+   #############################################################################
    environment(f_simulate_ij) = globalenv()
    environment(f_hist_reshape) = globalenv()
    
@@ -619,6 +661,8 @@ for (d in 1:n_day_sim) {
          # Get history nc file name:
          filename = paste0(simulation_dir, 'hist_data/hist_grid_', YYYY, MM, DD, '.nc')
          
+         print(paste0('nc filename = ', filename))
+         
          # Delete previous history nc file:
          if (file.exists(filename)) file.remove(filename)
          
@@ -627,7 +671,13 @@ for (d in 1:n_day_sim) {
          
          # Put in values of variables:
          for (v in 1:nrow(var_name)) {
-            if (var_name[v,4] != 'PFT') ncvar_put(nc=nc, varid=var_list[[v]], vals= hist_grid[,,1,,v]) else ncvar_put(nc, varid=var_list[[v]], vals=hist_grid[,,,,v])
+            if (var_name[v,4] == 'grid') {
+                    ncvar_put(nc=nc, varid=var_list[[v]], vals= hist_grid[,,1,,v])
+                } else if (var_name[v,4] == 'PFT') {
+                    ncvar_put(nc=nc, varid=var_list[[v]], vals=hist_grid[,,,,v])
+                } else if (var_name[v,4] == 'PFT_daily') {
+                    ncvar_put(nc=nc, varid=var_list[[v]], vals=hist_grid[,,,24,v])
+                }
          }
          
          # Put in dimentions and attributes:
@@ -639,16 +689,19 @@ for (d in 1:n_day_sim) {
          ncatt_put(nc, varid=0, attname='Conventions', attval='COARDS')
          ncatt_put(nc, varid=0, attname='History', attval=paste0('Generated on ', Sys.time()))
          
-         # FLUXNET data warnings:
-         if (single_site_flag && FLUXNET_flag) {
-            ncatt_put(nc, varid=0, attname='FLUXNET Site Warnings', attval=FLUXNET_global_err)
-            if (!is.null(FLUXNET_var_err)) {
-               ncvar_put(nc, varid=FLUXNET_err_nc_def, vals=FLUXNET_var_err)
-               ncatt_put(nc, varid='error_number', attname='axis', attval='n_error')
-               ncatt_put(nc, varid='error_replace', attname='axis', attval='error_replace')
-               rm(FLUXNET_var_err)
-            }
-         }
+         # Disable at the time being (Pang, Apr 2020)
+         # Apparently we cannot wrtie logical values into the ncdf4
+         
+         # # FLUXNET data warnings:
+         # if (single_site_flag && FLUXNET_flag) {
+         #    ncatt_put(nc, varid=0, attname='FLUXNET Site Warnings', attval=FLUXNET_global_err)
+         #    if (!is.null(FLUXNET_var_err)) {
+         #       ncvar_put(nc, varid=FLUXNET_err_nc_def, vals=FLUXNET_var_err)
+         #       ncatt_put(nc, varid='error_number', attname='axis', attval='n_error')
+         #       ncatt_put(nc, varid='error_replace', attname='axis', attval='error_replace')
+         #       rm(FLUXNET_var_err)
+         #    }
+         # }
          
          # Close nc file:
          nc_close(nc)

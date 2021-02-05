@@ -138,7 +138,7 @@ f_stomatal_cond = function(A_n, c_s=NULL, e_s=NULL, c_a=NULL, e_a=NULL, g_b=NULL
             if (C3_plant) {
                 m = 3.37*beta_t    # kPa^0.5
                 b = 100            # umol m^-2 s^-1
-            }else {
+            } else {
                 m = 1.1*beta_t      # kPa^0.5
                 b = 100             # umol m^-2 s^-1
             }
@@ -247,7 +247,6 @@ f_leaf_photosyn = function(c_i, phi, T_v=298.15, P_atm=101325, C3_plant=TRUE, V_
    # *** Now modified such that if "canopy_avg=TRUE", "SAI" need not be provided, but the sunlit leaf area index, "LAI_sun", has to explicitly provided. (Tai, Feb 2019)
     # Canopy scaling uses the nitrogen and light extinction coefficient, "K_n" and "K_b", respectively.
     # If "biogeochem=TRUE", leaf mitochondrial respiration at 25 degC "R_d25" is calculated using leaf nitrogen concentration "leaf_N_conc" (g N m^-2 leaf area).
-    
     # Canopy scaling:
     if (canopy_avg) {
         # if (is.null(LAI) | is.null(SAI) | is.null(sunlit)) stop('LAI, SAI or sunlit parameters have to be provided to calculate canopy averages.')
@@ -449,7 +448,8 @@ f_ozone_impact = function(O3_conc, g_s, g_b, g_ah, P_atm=101325, theta_atm=298.1
     # Convert from ppb to nmol m^-3:
     O3_conc_nmol = O3_conc*P_atm/(theta_atm*R_uni)
     # O3:H2O resistance ratio defined by Sitch et al. (2007):
-    k_O3 = 1.67
+    # k_O3 = 1.67
+    k_O3 = 1.61
     # Instantaneous ozone flux (nmol m^-2 s^-1):
     O3_flux = O3_conc_nmol/(k_O3/g_s + 1/g_b + 1/g_ah)
     # This follows Lombardozzi et al. [2015], but it seems more appropriate to use g_ah or g_aw instead of g_am to calculate ozone flux.
@@ -458,14 +458,19 @@ f_ozone_impact = function(O3_conc, g_s, g_b, g_ah, P_atm=101325, theta_atm=298.1
     if (scheme == 'Lombardozzi') {
         
         # Add a threshold of uptake (nmol m^-2 s^-1):
-        O3_flux_th = 0.8
+        # O3_flux_th = 0.8
+        O3_flux_th = 4  # derived from soyFACE, apply for soybean only
         O3_flux_crit = max(c(0, (O3_flux - O3_flux_th)), na.rm=TRUE)
         # Model time step in hr:
         dt_hr = dt/3600
         # Ozone flux per time step (mmol m^-2):
         O3_flux_dt = O3_flux_crit*1e-6*dt
         
-        if (LAI > 0.5) {
+        # Suggestion from Jacky (Feb, 2020)
+        # 1. the condition 'LAI > 0.5' should not apply on annual crops
+        # 2. 'heal' is not considered when deriving coefficients for soybean
+        
+        if (LAI > 0.5 & plant_group != 'C3_grass' & plant_group != 'C4_grass') {
             # Minimize O3 damage to new leaves:
             if (LAI > LAI_prev) heal = max(c(0, (LAI - LAI_prev)/LAI*O3_flux_dt), na.rm=TRUE) else heal = 0
             # Leaf turnover in hr^-1 by PFT:
@@ -474,6 +479,9 @@ f_ozone_impact = function(O3_conc, g_s, g_b, g_ah, P_atm=101325, theta_atm=298.1
             decay = CUO_prev*turnover*dt_hr
             # New CUO (mmol m^-2):
             CUO = max(c(0, (CUO_prev + O3_flux_dt - decay - heal)), na.rm=TRUE)
+            
+        } else if (LAI > 0 & plant_group == 'C3_grass' | plant_group == 'C4_grass') {
+            CUO = max(c(0, (CUO_prev + O3_flux_dt)), na.rm=TRUE)
         } else {
             CUO = 0
         }
@@ -505,7 +513,7 @@ f_ozone_impact = function(O3_conc, g_s, g_b, g_ah, P_atm=101325, theta_atm=298.1
             broad_gs_slope = 0
             grass_gs_int = 0.4621
             grass_gs_slope = 0.0229
-        } else {
+        } else if (sensitivity == 'average'){
             needle_An_int = 0.8390
             needle_An_slope = 0
             broad_An_int = 0.8752
@@ -518,6 +526,12 @@ f_ozone_impact = function(O3_conc, g_s, g_b, g_ah, P_atm=101325, theta_atm=298.1
             broad_gs_slope = 0
             grass_gs_int = 0.7511
             grass_gs_slope = 0
+        } else if (sensitivity == 'custom') {
+            # for soyFACE simulation only
+            grass_An_int = 1
+            grass_An_slope = -0.0179
+            grass_gs_int = 1
+            grass_gs_slope = -0.0145
         }
         
         # Ozone impact factors:
@@ -631,7 +645,7 @@ f_ci2 = function() {
 
 # Solving for leaf photosynthesis (umol CO2 m^-2 s^-1), stomatal conductance and boundary-layer conductance (umol m^-2 s^-1 or m s^-1) with the Farquhar-Ball-Berry model:
 f_Farquhar_Ball_Berry = function(c_a, e_a, phi, T_v=298.15, P_atm=101325, theta_atm=298.15, C3_plant=TRUE, V_cmax25_0, Phi_PSII=0.85, Theta_PSII=0.70, beta_t=1, acclimation=FALSE, T_10d=NULL, lat=0, decl=0, colimit=TRUE, canopy_avg=FALSE, sunlit=NULL, LAI=NULL, LAI_sun=NULL, K_n=0.30, K_b=0.50, O3_damage=FALSE, O3_conc=NULL, scheme='Lombardozzi', gs_scheme = 'FBB', dt=3600, LAI_prev=NULL, evergreen=FALSE, leaf_long=1e3, CUO_prev=0, sensitivity='high', plant_group='broadleaf', g_ah=NULL, biogeochem=FALSE, leaf_N_conc=NULL, u_leaf, d_leaf=0.04, met_cond=FALSE, tol=1e-3, g1_med=NULL) {
-    
+
     # Uses external functions "f_boundary_cond", "f_leaf_photosyn", "f_stomatal_cond", "f_ozone_impact", and "f_ci".
     # Uses global constants: "R_uni = 8.31446" universal gas constant (J K^-1 mol^-1)
     # Atmospheric CO2 partial pressure "c_a" (Pa), vapor pressure in canopy air "e_a" (Pa), absorbed photosynthetically active radiation "phi" (W m^-2), maximum rate of carboxylation at 25 degC (at top of canopy) "V_cmax25_0" (umol CO2 m^-2 s^-1), "sunlit=TRUE/FALSE", leaf area index "LAI" (m^2 m^-2), and wind speed incident on leaf "u_leaf" (m s^-1) must be specified.
@@ -830,8 +844,8 @@ f_Farquhar_Ball_Berry = function(c_a, e_a, phi, T_v=298.15, P_atm=101325, theta_
 ################################################################################
 
 # Find canopy-integrated photosynthesis (umol CO2 m^-2 s^-1) and conductance (umol m^-2 s^-1 or m s^-1):
-f_canopy_photosyn = function(c_a, e_a, phi_sun, phi_sha, T_v=298.15, P_atm=101325, theta_atm=298.15, C3_plant=TRUE, V_cmax25_0, Phi_PSII=0.85, Theta_PSII=0.70, beta_t=1, acclimation=TRUE, T_10d=298.15, lat=0, decl=0, colimit=TRUE, LAI, LAI_sun, K_n=0.30, K_b=0.50, O3_damage=FALSE, O3_conc=NULL, scheme='Lombardozzi', gs_scheme = 'FBB', dt=3600, LAI_prev=NULL, evergreen=FALSE, leaf_long=1e3, CUO_prev_sun=0, CUO_prev_sha=0, sensitivity='high', plant_group='broadleaf', g_ah=NULL, biogeochem=FALSE, leaf_N_conc=NULL, u_leaf, d_leaf=0.04, met_cond=FALSE, tol=1e-3,g1_med=NULL) {
-    
+f_canopy_photosyn = function(c_a, e_a, phi_sun, phi_sha, T_v=298.15, P_atm=101325, theta_atm=298.15, C3_plant=TRUE, V_cmax25_0, Phi_PSII=0.85, Theta_PSII=0.70, beta_t=1, acclimation=TRUE, T_10d=298.15, lat=0, decl=0, colimit=TRUE, LAI, LAI_sun, K_n=0.30, K_b=0.50, O3_damage=FALSE, O3_conc=NULL, scheme='Lombardozzi', gs_scheme = 'FBB', dt=3600, LAI_prev=NULL, evergreen=FALSE, leaf_long=1e3, CUO_prev_sun=0, CUO_prev_sha=0, CUO_prev_can = 0, sensitivity='high', plant_group='broadleaf', g_ah=NULL, biogeochem=FALSE, leaf_N_conc=NULL, u_leaf, d_leaf=0.04, met_cond=FALSE, tol=1e-3, g1_med=NULL) {
+
     # Uses external function "f_Farquhar_Ball_Berry".
     # Uses global constants: "R_uni = 8.31446" universal gas constant (J K^-1 mol^-1)
     # Atmospheric CO2 partial pressure "c_a" (Pa), vapor pressure in canopy air "e_a" (Pa), absorbed photosynthetically active radiation by sunlit and shaded leaves, "phi_sun" and "phi_sha" (W m^-2), maximum rate of carboxylation at 25 degC (at top of canopy) "V_cmax25_0" (umol CO2 m^-2 s^-1), leaf area index "LAI" (m^2 m^-2), and wind speed incident on leaf "u_leaf" (m s^-1) must be specified.
@@ -863,13 +877,13 @@ f_canopy_photosyn = function(c_a, e_a, phi_sun, phi_sha, T_v=298.15, P_atm=10132
                                     plant_group=plant_group, 
                                     g_ah=g_ah, biogeochem=biogeochem, 
                                     leaf_N_conc=leaf_N_conc, u_leaf=u_leaf, 
-                                    d_leaf=d_leaf, met_cond=met_cond, tol=tol,g1_med=g1_med)
+                                    d_leaf=d_leaf, met_cond=met_cond, tol=tol, g1_med=g1_med)
     A_nsun = FBB_sun$A_n
     R_dsun = FBB_sun$R_d
     g_ssun = FBB_sun$g_s
     g_b = FBB_sun$g_b
     CUO_sun = FBB_sun$CUO
-    
+
     # Shaded leaves:
     FBB_sha = f_Farquhar_Ball_Berry(c_a=c_a, e_a=e_a, phi=phi_sha, T_v=T_v, 
                                     P_atm=P_atm, theta_atm=theta_atm, 
@@ -888,12 +902,12 @@ f_canopy_photosyn = function(c_a, e_a, phi_sun, phi_sha, T_v=298.15, P_atm=10132
                                     plant_group=plant_group, 
                                     g_ah=g_ah, biogeochem=biogeochem, 
                                     leaf_N_conc=leaf_N_conc, u_leaf=u_leaf, 
-                                    d_leaf=d_leaf, met_cond=met_cond, tol=tol,g1_med=g1_med)
+                                    d_leaf=d_leaf, met_cond=met_cond, tol=tol, g1_med=g1_med)
     A_nsha = FBB_sha$A_n
     R_dsha = FBB_sha$R_d
     g_ssha = FBB_sha$g_s
     CUO_sha = FBB_sha$CUO
-    
+
     # Sunlit and shaded plant area index:
     # Make sure K_b > 0 always. At night, set K_b = 1e6.
     # We believe that A_can, R_can and g_can should be scaled up by LAI only, not by LAI + SAI. Therefore, L_sun and L_sha here should be sunlit and shaded leaf area index, not plant area index, but we still consider both LAI and SAI when calculating light extinction. Now they are renamed "LAI_sun" and "LAI_sha" and "LAI_sun" has to taken explicitly from canopy radiative transfer model. (Tai, Feb 2019)
@@ -910,11 +924,26 @@ f_canopy_photosyn = function(c_a, e_a, phi_sun, phi_sha, T_v=298.15, P_atm=10132
     g_can = LAI_sun/(1/g_b + 1/g_ssun) + LAI_sha/(1/g_b + 1/g_ssha)
     
     # The way to calculate CUO below is not right... We will have to correct it . (Tai, Feb 2019)
-    CUO_can = CUO_sun*LAI_sun + CUO_sha*LAI_sha
+    # CUO_can = CUO_sun*LAI_sun + CUO_sha*LAI_sha
+
+    # CUO_can could be calculated as follow: (Pang, March 2020)
+    # CUO_can (t+1) = CUO_can (t) + (delta(CUO_sun(t)) * LAIsun + delta(CUO_sha(t)) * LAIsha) / LAI
+    CUO_sun_change = max(0, CUO_sun - CUO_prev_sun)
+    CUO_sha_change = max(0, CUO_sha - CUO_prev_sha)
+    
+    # prevent division of zero when LAI is zero (BGC mode)
+    CUO_can_change = ifelse (test = LAI_sha + LAI_sha == 0 | is.na(LAI_sha + LAI_sha), yes = 0,
+                             no = (CUO_sun_change * LAI_sun + CUO_sha_change * LAI_sha) / (LAI_sun + LAI_sha))
+    CUO_can_change = max(0, CUO_can_change)
+    
+    # force CUO_can to be zero when plant (crop) is not planted
+    CUO_can = ifelse (test = LAI_sha + LAI_sha == 0 | is.na(LAI_sha + LAI_sha), yes = 0,
+                    no = CUO_prev_can + CUO_can_change)
+    
     
     # Stomatal conductance weighted by sunlit and shaded fraction (umol m^-2 s^-1 or m s^-1):
     g_s = (g_ssun*LAI_sun + g_ssha*LAI_sha)/(LAI_sun + LAI_sha)
-    
+
     output = list(A_can=A_can, R_can=R_can, g_can=g_can, CUO_can=CUO_can, A_nsun=A_nsun, A_nsha=A_nsha, R_dsun=R_dsun, R_dsha=R_dsha, g_ssun=g_ssun, g_ssha=g_ssha, g_s=g_s, g_b=g_b, CUO_sun=CUO_sun, CUO_sha=CUO_sha)
     return(output)
     
