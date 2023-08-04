@@ -1,8 +1,10 @@
 ################################################################################
 
-You may download the minimum set of data to run TEMIR here:
-https://gocuhk-my.sharepoint.com/:f:/g/personal/amostai_cuhk_edu_hk/EoUr7qdn57lPsCzTZgt-Cd0Br1tehu6nCfz8253MYEXSTQ
+You may download the necessary input data for TEMIR from the public repository here:
+https://doi.org/10.5281/zenodo.8215152
 
-(Apr 2020, Tai)
+Dataset DOI: 10.5281/zenodo.8215152
+
+(Aug 2023, Tai)
 
 ################################################################################
